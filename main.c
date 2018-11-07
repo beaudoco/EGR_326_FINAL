@@ -84,7 +84,6 @@ uint8_t inline convertFromBCD(uint8_t bcd) {return (bcd & 0x0F) + (((bcd & 0xF0)
 
 uint16_t textColor = ST7735_GREEN;
 uint16_t bgColor   = ST7735_BLACK;
-uint16_t promptUser(char* str);
 
 char timeArr1[25];
 char timeArr2[25];
@@ -96,12 +95,9 @@ char RTC_registers[20];
 void iicInit(void);
 void readFromSlave(void);
 void writeFromMaster(void);
-//void port_Init(void);
 void setTime(void);
 void printTime(void);
 void initClocks(void);
-
-//int getKey(void);
 
 int main(void)
 {
@@ -112,9 +108,6 @@ int main(void)
     KEYPAD_port_Init();                                                // Port Init
     iicInit();                                                  // Init iic to RTC
     initClocks();
-
-    uint8_t read_back_data[SIZE_ARRAY];                         // array to hold values read back from flash
-    uint8_t* addr_pointer;                                      // pointer to address in flash for reading back values
 
     ST7735_InitR(INITR_REDTAB);
     ST7735_FillScreen(0);
@@ -130,7 +123,7 @@ int main(void)
         if(key == 10) {
             uint8_t i;                                                                                      // index
             COMMONCLOCKS_sysTick_delay_48MHZ(msDelay);                                                      // Setting MCLK to 48MHz for faster programming
-            addr_pointer = CALIBRATION_START+4;                                                             // point to address in flash for saving data
+            uint8_t* addr_pointer = CALIBRATION_START+4;                                                             // point to address in flash for saving data
 
             for(i=0; i<25; i++) {                                                                           // read values in flash before programming
                 timeArr1[i] = *addr_pointer++;
@@ -166,51 +159,22 @@ void setTime() {
 
     uint8_t tempVar;
 
-    tempVar   = promptUser("year (0-99)");                  // ask for year
+    tempVar   = KEYPAD_promptUser("year (0-99)");                  // ask for year
     bcdYear   = convertToBCD(tempVar);                      // assign year
-    tempVar   = promptUser("Month (01-12)");                // ask for month
+    tempVar   = KEYPAD_promptUser("Month (01-12)");                // ask for month
     bcdMonth  = convertToBCD(tempVar);                      // assign month
-    tempVar   = promptUser("Date (01-31)");                 // ask for date
+    tempVar   = KEYPAD_promptUser("Date (01-31)");                 // ask for date
     bcdDate   = convertToBCD(tempVar);                      // assign date
-    tempVar   = promptUser("Day (1-7)");                    // ask for day
+    tempVar   = KEYPAD_promptUser("Day (1-7)");                    // ask for day
     bcdDay    = convertToBCD(tempVar);                      // assign day
-    tempVar   = promptUser("Hour (1-12 + AM/PM, 00-23)");   // ask for hour
+    tempVar   = KEYPAD_promptUser("Hour (1-12 + AM/PM, 00-23)");   // ask for hour
     bcdHour   = convertToBCD(tempVar);                      // assign hour
-    tempVar   = promptUser("Minute (00-59)");               // ask for minute
+    tempVar   = KEYPAD_promptUser("Minute (00-59)");               // ask for minute
     bcdMinute = convertToBCD(tempVar);                      // assign minute
-    tempVar   = promptUser("Second (00-59)");               // ask for second
+    tempVar   = KEYPAD_promptUser("Second (00-59)");               // ask for second
     bcdSecond = convertToBCD(tempVar);                      // set second variable
 
     writeFromMaster();                                      // send bcd time/date/etc
-}
-
-uint16_t promptUser(char* str)
-{
-    uint16_t tempVar;
-
-    printf("Please enter the %s then press the # key.\n", str);
-    fflush(stdout);
-
-    int key    = KEYPAD_getKey();
-    int number = 0;
-    do
-    {
-        if(key != 0 && key != 10)
-        {
-            key    = (key==11) ? 0 : key;
-            number = number*10 + key;
-            printf("%d", key);
-            fflush(stdout);
-        }
-
-        key = KEYPAD_getKey();
-    }while(key != 12);
-
-    printf("\n");
-
-    tempVar = number;
-
-    return tempVar;
 }
 
 void printTime() {
@@ -311,7 +275,6 @@ void printTime() {
         }
     }
 
-
     MAP_FlashCtl_unprotectSector(FLASH_INFO_MEMORY_SPACE_BANK0,FLASH_SECTOR0);                      // Unprotecting Info Bank 0, Sector 0
 
     while(!MAP_FlashCtl_eraseSector(CALIBRATION_START));                                            // Erase the flash sector starting CALIBRATION_START.
@@ -380,51 +343,6 @@ void readFromSlave() {
     while(MAP_I2C_isBusBusy(EUSCI_B1_BASE));    //Wait
 
 }
-
-//int getKey()
-//{
-//    for(col = 0; col < 3; col++)
-//    {
-//        P4DIR &= ~(BIT0 | BIT1 | BIT2);             // Disable all columns
-//        P4DIR |=  BIT(col);                         // col# is enabled
-//        P4OUT &= ~BIT(col);                         // Drive col# low
-//        COMMONCLOCKS_sysTick_delay_48MHZ(10);                          // delay 20 ms.
-//        row = (P4IN & 0b1111000);                   // Read the rows
-//
-//        /** Wait for button to be released */
-//        while(!(P4IN & BIT3) | !(P4IN & BIT4) | !(P4IN & BIT5) | !(P4IN &BIT6));
-//
-//        P4OUT |= BIT(col);                          // Drive col# high
-//
-//        if(row != 0b1111000)                        // If a row is low a key has been pressed for the selected col
-//            break;
-//     }
-//
-//    P4OUT |= BIT0 | BIT1 | BIT2;                    // Drive columns high before disabling them
-//    P4DIR &= ~(BIT0 | BIT1 | BIT2);                 // Disable All Columns
-//
-//    /** Simple Algebra to return the correct key press */
-//    if(col == 3)
-//        return 0;                                   // No key is pressed
-//    if(row == 0b0111000)                            // Row 0
-//        value = col + 1;
-//    if(row == 0b1011000)                            // Row 1
-//        value = 3 + col + 1;
-//    if(row == 0b1101000)                            // Row 2
-//        value = 6 + col + 1;
-//    if(row == 0b1110000)                            // Row 3
-//        value = 9 + col + 1;
-//    return value;
-//}
-
-//void port_Init()
-//{
-//    P4SEL0 = 0x00;                                  // Port 4 set for GPIO
-//    P4SEL1 = 0x00;
-//    P4DIR  = 0X00;                                  // All bits in port 4 are setup as inputs
-//    P4REN |= 0b1111000;                             // Enable pull resistor on bits 3-6
-//    P4OUT |= 0b1111000;                             // Bits 3-6 are pull-up
-//}
 
 /*************************************************
  * Initializes MCLK to run from external crystal.

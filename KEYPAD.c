@@ -56,6 +56,35 @@ int KEYPAD_getKey()
         value = 9 + col + 1;
     return value;
 }
+
+uint16_t KEYPAD_promptUser(char* str)
+{
+    uint16_t tempVar;
+
+    printf("Please enter the %s then press the # key.\n", str);
+    fflush(stdout);
+
+    int key    = KEYPAD_getKey();
+    int number = 0;
+    do
+    {
+        if(key != 0 && key != 10)
+        {
+            key    = (key==11) ? 0 : key;
+            number = number*10 + key;
+            printf("%d", key);
+            fflush(stdout);
+        }
+
+        key = KEYPAD_getKey();
+    }while(key != 12);
+
+    printf("\n");
+
+    tempVar = number;
+
+    return tempVar;
+}
 //
 //void KEYPAD_printDay(uint8_t day) {
 //    switch(day) {

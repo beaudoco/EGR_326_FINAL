@@ -10,6 +10,7 @@
 
 void KEYPAD_port_Init();
 int KEYPAD_getKey();
+uint16_t KEYPAD_promptUser(char* str);
 //void KEYPAD_printDay(uint8_t day);
 //void KEYPAD_printTime(uint8_t optionKey);
 //uint16_t KEYPAD_promptUser(char* str);
