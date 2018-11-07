@@ -11,6 +11,7 @@ GEN_CMDS__FLAG :=
 
 ORDERED_OBJS += \
 "./COMMONCLOCKS.obj" \
+"./KEYPAD.obj" \
 "./ST7735.obj" \
 "./main.obj" \
 "./startup_msp432p401r_ccs.obj" \
@@ -161,8 +162,8 @@ EGR326_Final_Project.bin: $(EXE_OUTPUTS)
 # Other Targets
 clean:
 	-$(RM) $(BIN_OUTPUTS__QUOTED)$(EXE_OUTPUTS__QUOTED)
-	-$(RM) "COMMONCLOCKS.obj" "ST7735.obj" "main.obj" "startup_msp432p401r_ccs.obj" "system_msp432p401r.obj" 
-	-$(RM) "ST7735.d" "main.d" "startup_msp432p401r_ccs.d" "system_msp432p401r.d" 
+	-$(RM) "COMMONCLOCKS.obj" "KEYPAD.obj" "ST7735.obj" "main.obj" "startup_msp432p401r_ccs.obj" "system_msp432p401r.obj" 
+	-$(RM) "KEYPAD.d" "ST7735.d" "main.d" "startup_msp432p401r_ccs.d" "system_msp432p401r.d" 
 	-$(RM) "COMMONCLOCKS.d" 
 	-@echo 'Finished clean'
 	-@echo ' '

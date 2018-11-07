@@ -1,1 +1,1 @@
-"./COMMONCLOCKS.obj" "./ST7735.obj" "./main.obj" "./startup_msp432p401r_ccs.obj" "./system_msp432p401r.obj" "../driverlib_empty_project_ccs.cmd" "C:/ti/msp/MSP432Ware_3_50_00_02/driverlib/driverlib/MSP432P4xx/ccs/msp432p4xx_driverlib.lib" -llibc.a 
+"./COMMONCLOCKS.obj" "./KEYPAD.obj" "./ST7735.obj" "./main.obj" "./startup_msp432p401r_ccs.obj" "./system_msp432p401r.obj" "../driverlib_empty_project_ccs.cmd" "C:/ti/msp/MSP432Ware_3_50_00_02/driverlib/driverlib/MSP432P4xx/ccs/msp432p4xx_driverlib.lib" -llibc.a 
