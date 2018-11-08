@@ -53,30 +53,20 @@
 #include "COMMONCLOCKS.h"
 #include "KEYPAD.h"
 #include "ST7735.h"
+#include "RTC.h"
 #include <msp.h>
 #include <stdlib.h>
 
-#define SLAVE_ADDRESS       0b1101000
 #define NUM_OF_REC_BYTES    10
 #define SIZE_ARRAY          25
 #define NUMBER_ARRAY        5
 #define CALIBRATION_START   0x000200000         // CALIBRATION START
-
-const eUSCI_I2C_MasterConfig i2cConfig =
-{
-        EUSCI_B_I2C_CLOCKSOURCE_SMCLK,          // SMCLK Clock Source
-        3000000,                                // SMCLK = 3MHz
-        EUSCI_B_I2C_SET_DATA_RATE_400KBPS,      // Desired I2C Clock of 400khz
-        0,                                      // No byte counter threshold
-        EUSCI_B_I2C_NO_AUTO_STOP                // No Autostop
-};
 
 int sysTikToggleSpeed = 15000;
 int msDelay           = 25;
 int firstRead         = 1;
 
 uint8_t row, col, value, key;
-uint8_t bcdSecond, bcdMinute, bcdHour, bcdDay, bcdDate, bcdMonth, bcdYear;
 uint8_t textSize  = 4;
 
 uint8_t inline convertToBCD(uint8_t dec) {return (dec%10) | (((dec/10)%10) << 4);}
@@ -92,12 +82,8 @@ char timeArr4[25];
 char timeArr5[25];
 char RTC_registers[20];
 
-void iicInit(void);
 void readFromSlave(void);
-void writeFromMaster(void);
-void setTime(void);
 void printTime(void);
-void initClocks(void);
 
 int main(void)
 {
@@ -106,13 +92,13 @@ int main(void)
 
     COMMONCLOCKS_sysTick_Init();                                // Systick Init
     KEYPAD_port_Init();                                                // Port Init
-    iicInit();                                                  // Init iic to RTC
-    initClocks();
+    RTC_iicInit();                                                  // Init iic to RTC
+    COMMONCLOCKS_initClocks();
 
     ST7735_InitR(INITR_REDTAB);
     ST7735_FillScreen(0);
     ST7735_FillScreen(bgColor);
-    //setTime();                                                  // set time variable for RTC
+    //RTC_setTime();                                                  // set time variable for RTC
     ST7735_DrawString(0, 0, "Enter * to view", ST7735_YELLOW);
     ST7735_DrawString(0, 1, "previous times.", ST7735_YELLOW);
 
@@ -125,25 +111,25 @@ int main(void)
             COMMONCLOCKS_sysTick_delay_48MHZ(msDelay);                                                      // Setting MCLK to 48MHz for faster programming
             uint8_t* addr_pointer = CALIBRATION_START+4;                                                             // point to address in flash for saving data
 
-            for(i=0; i<25; i++) {                                                                           // read values in flash before programming
-                timeArr1[i] = *addr_pointer++;
-            }
-
-            for(i=0; i<25; i++) {                                                                           // read values in flash before programming
-                timeArr2[i] = *addr_pointer++;
-            }
-
-            for(i=0; i<25; i++) {                                                                           // read values in flash before programming
-                timeArr3[i] = *addr_pointer++;
-            }
-
-            for(i=0; i<25; i++) {                                                                           // read values in flash before programming
-                timeArr4[i] = *addr_pointer++;
-            }
-
-            for(i=0; i<25; i++) {                                                                           // read values in flash before programming
-                timeArr5[i] = *addr_pointer++;
-            }
+//            for(i=0; i<25; i++) {                                                                           // read values in flash before programming
+//                timeArr1[i] = *addr_pointer++;
+//            }
+//
+//            for(i=0; i<25; i++) {                                                                           // read values in flash before programming
+//                timeArr2[i] = *addr_pointer++;
+//            }
+//
+//            for(i=0; i<25; i++) {                                                                           // read values in flash before programming
+//                timeArr3[i] = *addr_pointer++;
+//            }
+//
+//            for(i=0; i<25; i++) {                                                                           // read values in flash before programming
+//                timeArr4[i] = *addr_pointer++;
+//            }
+//
+//            for(i=0; i<25; i++) {                                                                           // read values in flash before programming
+//                timeArr5[i] = *addr_pointer++;
+//            }
 
             addr_pointer = CALIBRATION_START+4;                                                             // point to address in flash for saved data
 
@@ -153,28 +139,6 @@ int main(void)
         }
 
     } // end of main while(1)
-}
-
-void setTime() {
-
-    uint8_t tempVar;
-
-    tempVar   = KEYPAD_promptUser("year (0-99)");                  // ask for year
-    bcdYear   = convertToBCD(tempVar);                      // assign year
-    tempVar   = KEYPAD_promptUser("Month (01-12)");                // ask for month
-    bcdMonth  = convertToBCD(tempVar);                      // assign month
-    tempVar   = KEYPAD_promptUser("Date (01-31)");                 // ask for date
-    bcdDate   = convertToBCD(tempVar);                      // assign date
-    tempVar   = KEYPAD_promptUser("Day (1-7)");                    // ask for day
-    bcdDay    = convertToBCD(tempVar);                      // assign day
-    tempVar   = KEYPAD_promptUser("Hour (1-12 + AM/PM, 00-23)");   // ask for hour
-    bcdHour   = convertToBCD(tempVar);                      // assign hour
-    tempVar   = KEYPAD_promptUser("Minute (00-59)");               // ask for minute
-    bcdMinute = convertToBCD(tempVar);                      // assign minute
-    tempVar   = KEYPAD_promptUser("Second (00-59)");               // ask for second
-    bcdSecond = convertToBCD(tempVar);                      // set second variable
-
-    writeFromMaster();                                      // send bcd time/date/etc
 }
 
 void printTime() {
@@ -298,33 +262,6 @@ void printTime() {
     ST7735_DrawString(2, 10, timeArr5, textColor);
 }
 
-void iicInit() {
-
-    // For example, select Port 6 for I2C
-    MAP_GPIO_setAsPeripheralModuleFunctionInputPin(GPIO_PORT_P6,    // Set Pin 4, 5 to input Primary Module Function,
-    GPIO_PIN4 + GPIO_PIN5, GPIO_PRIMARY_MODULE_FUNCTION);           // P6.4 is UCB1SDA, P6.5 is UCB1SCL
-
-    // Initializing I2C Master (see description in Driver Lib for
-    MAP_I2C_initMaster(EUSCI_B1_BASE, &i2cConfig);                  // proper configuration options)
-    MAP_I2C_setSlaveAddress(EUSCI_B1_BASE, SLAVE_ADDRESS);          // Specify slave address
-    MAP_I2C_setMode(EUSCI_B1_BASE, EUSCI_B_I2C_TRANSMIT_MODE);      // Set Master in transmit mode
-    MAP_I2C_enableModule(EUSCI_B1_BASE);                            // Enable I2C Module to start operations
-}
-
-void writeFromMaster() {
-
-    MAP_I2C_setMode(EUSCI_B1_BASE, EUSCI_B_I2C_TRANSMIT_MODE);      // Set the master in transmit mode
-    while(MAP_I2C_isBusBusy(EUSCI_B1_BASE));                        // Wait until bus is no longer busy, Master is ready to write
-    MAP_I2C_masterSendMultiByteStart(EUSCI_B1_BASE, 0);             // Start multi-byte transmission from MSP432 to RTC
-    MAP_I2C_masterSendMultiByteNext(EUSCI_B1_BASE, bcdSecond);      // Write to seconds register
-    MAP_I2C_masterSendMultiByteNext(EUSCI_B1_BASE, bcdMinute);      // Write to minutes register
-    MAP_I2C_masterSendMultiByteNext(EUSCI_B1_BASE, bcdHour);        // Write to hours register
-    MAP_I2C_masterSendMultiByteNext(EUSCI_B1_BASE, bcdDay);         // Write to days register
-    MAP_I2C_masterSendMultiByteNext(EUSCI_B1_BASE, bcdDate);        // Write to date register
-    MAP_I2C_masterSendMultiByteNext(EUSCI_B1_BASE, bcdMonth);       // Write to months register
-    MAP_I2C_masterSendMultiByteFinish(EUSCI_B1_BASE, bcdYear);      // Write to year register and send stop bit
-}
-
 void readFromSlave() {
 
     MAP_I2C_setMode(EUSCI_B1_BASE, EUSCI_B_I2C_TRANSMIT_MODE);      // Set Master in transmit mode
@@ -342,20 +279,4 @@ void readFromSlave() {
 
     while(MAP_I2C_isBusBusy(EUSCI_B1_BASE));    //Wait
 
-}
-
-/*************************************************
- * Initializes MCLK to run from external crystal.
- * Code taken from lecture notes
- ************************************************/
-void initClocks()
-{
-    MAP_GPIO_setAsPeripheralModuleFunctionOutputPin(GPIO_PORT_PJ, GPIO_PIN3 | GPIO_PIN4, GPIO_PRIMARY_MODULE_FUNCTION); // Configuring pins for XTL usage
-    MAP_CS_setExternalClockSourceFrequency(32000,48000000);                                                             // Setting external clock frequency
-    MAP_PCM_setCoreVoltageLevel(PCM_VCORE1);                                                                            // Starting HFXT
-    MAP_FlashCtl_setWaitState(FLASH_BANK0, 2);
-    MAP_FlashCtl_setWaitState(FLASH_BANK1, 2);
-    MAP_CS_startHFXT(false);
-    MAP_CS_initClockSignal(CS_MCLK, CS_HFXTCLK_SELECT, CS_CLOCK_DIVIDER_1);                                             // Initializing MCLK to HFXT (48MHz)
-    MAP_CS_initClockSignal(CS_SMCLK, CS_HFXTCLK_SELECT, CS_CLOCK_DIVIDER_16);                                            // Setting SMCLK to 12MHz (HFXT/4)
 }

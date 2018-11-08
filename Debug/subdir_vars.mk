@@ -16,6 +16,7 @@ C:/Users/Collin\ Beaudoin/Documents/EGR326/CustomLibrary/COMMONCLOCKS.C
 
 C_SRCS += \
 ../KEYPAD.c \
+../RTC.c \
 ../ST7735.c \
 ../main.c \
 ../startup_msp432p401r_ccs.c \
@@ -26,6 +27,7 @@ C_UPPER_DEPS += \
 
 C_DEPS += \
 ./KEYPAD.d \
+./RTC.d \
 ./ST7735.d \
 ./main.d \
 ./startup_msp432p401r_ccs.d \
@@ -34,6 +36,7 @@ C_DEPS += \
 OBJS += \
 ./COMMONCLOCKS.obj \
 ./KEYPAD.obj \
+./RTC.obj \
 ./ST7735.obj \
 ./main.obj \
 ./startup_msp432p401r_ccs.obj \
@@ -42,6 +45,7 @@ OBJS += \
 OBJS__QUOTED += \
 "COMMONCLOCKS.obj" \
 "KEYPAD.obj" \
+"RTC.obj" \
 "ST7735.obj" \
 "main.obj" \
 "startup_msp432p401r_ccs.obj" \
@@ -49,6 +53,7 @@ OBJS__QUOTED += \
 
 C_DEPS__QUOTED += \
 "KEYPAD.d" \
+"RTC.d" \
 "ST7735.d" \
 "main.d" \
 "startup_msp432p401r_ccs.d" \
@@ -62,6 +67,7 @@ C_UPPER_SRCS__QUOTED += \
 
 C_SRCS__QUOTED += \
 "../KEYPAD.c" \
+"../RTC.c" \
 "../ST7735.c" \
 "../main.c" \
 "../startup_msp432p401r_ccs.c" \

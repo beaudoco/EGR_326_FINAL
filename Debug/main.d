@@ -57,6 +57,7 @@ main.obj: C:/ti/ccsv8/tools/compiler/ti-cgt-arm_18.1.3.LTS/include/string.h
 main.obj: C:/Users/Collin\ Beaudoin/Documents/EGR326/CustomLibrary/COMMONCLOCKS.h
 main.obj: ../KEYPAD.h
 main.obj: ../ST7735.h
+main.obj: ../RTC.h
 main.obj: C:/ti/ccsv8/tools/compiler/ti-cgt-arm_18.1.3.LTS/include/stdlib.h
 
 ../main.c: 
@@ -116,4 +117,5 @@ C:/ti/ccsv8/tools/compiler/ti-cgt-arm_18.1.3.LTS/include/string.h:
 C:/Users/Collin\ Beaudoin/Documents/EGR326/CustomLibrary/COMMONCLOCKS.h: 
 ../KEYPAD.h: 
 ../ST7735.h: 
+../RTC.h: 
 C:/ti/ccsv8/tools/compiler/ti-cgt-arm_18.1.3.LTS/include/stdlib.h: 
