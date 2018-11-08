@@ -16,6 +16,7 @@ C:/Users/Collin\ Beaudoin/Documents/EGR326/CustomLibrary/COMMONCLOCKS.C
 
 C_SRCS += \
 ../KEYPAD.c \
+../LCD.c \
 ../RTC.c \
 ../ST7735.c \
 ../main.c \
@@ -27,6 +28,7 @@ C_UPPER_DEPS += \
 
 C_DEPS += \
 ./KEYPAD.d \
+./LCD.d \
 ./RTC.d \
 ./ST7735.d \
 ./main.d \
@@ -36,6 +38,7 @@ C_DEPS += \
 OBJS += \
 ./COMMONCLOCKS.obj \
 ./KEYPAD.obj \
+./LCD.obj \
 ./RTC.obj \
 ./ST7735.obj \
 ./main.obj \
@@ -45,6 +48,7 @@ OBJS += \
 OBJS__QUOTED += \
 "COMMONCLOCKS.obj" \
 "KEYPAD.obj" \
+"LCD.obj" \
 "RTC.obj" \
 "ST7735.obj" \
 "main.obj" \
@@ -53,6 +57,7 @@ OBJS__QUOTED += \
 
 C_DEPS__QUOTED += \
 "KEYPAD.d" \
+"LCD.d" \
 "RTC.d" \
 "ST7735.d" \
 "main.d" \
@@ -67,6 +72,7 @@ C_UPPER_SRCS__QUOTED += \
 
 C_SRCS__QUOTED += \
 "../KEYPAD.c" \
+"../LCD.c" \
 "../RTC.c" \
 "../ST7735.c" \
 "../main.c" \

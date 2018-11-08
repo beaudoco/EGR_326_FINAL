@@ -54,6 +54,7 @@
 #include "KEYPAD.h"
 #include "ST7735.h"
 #include "RTC.h"
+#include "LCD.h"
 #include <msp.h>
 #include <stdlib.h>
 
@@ -63,10 +64,7 @@ int meas1    = 0;
 int meas2    = 0;
 int count    = 0;
 
-uint16_t textColor = ST7735_GREEN;
 uint16_t bgColor   = ST7735_BLACK;
-
-void controlLED(int distance);
 
 int main(void)
 {
@@ -97,11 +95,7 @@ int main(void)
 
     COMMONCLOCKS_timerAInit();
 
-    /* Starting the Timer32 */
-    Timer32_initModule(TIMER32_0_BASE, TIMER32_PRESCALER_1, TIMER32_32BIT, TIMER32_PERIODIC_MODE);
-    Timer32_disableInterrupt(TIMER32_0_BASE);
-    Timer32_setCount(TIMER32_0_BASE, 1);
-    Timer32_startTimer(TIMER32_0_BASE, true);
+    COMMONCLOCKS_Timer32_Setup();
 
     /* Starting the Timer_A0 in continuous mode */
     Timer_A_startCounter(TIMER_A0_BASE, TIMER_A_CONTINUOUS_MODE);
@@ -114,33 +108,11 @@ int main(void)
         GPIO_setOutputLowOnPin(GPIO_PORT_P1, GPIO_PIN5);
 
         distance = (((meas2-meas1) *340)/60000)*.393701;
-        controlLED(distance);
+        LCD_controlLCD(distance,&count);
         COMMONCLOCKS_sysTick_delay_3MHZ(delay);
        // printf("%d\n",distance);
 
     } // end of main while(1)
-}
-
-void controlLED(int distance) {
-    char dist[13];
-    sprintf(dist, "Distance : %d", distance);
-    if (distance <= 9 && distance >= 0) {
-        if(distance <= 3 ) {
-            if(count<20)
-                count++;
-            else {
-                MAP_GPIO_setOutputHighOnPin(GPIO_PORT_P6, GPIO_PIN1);
-                textColor = ST7735_RED;
-                ST7735_DrawString(2, 8,dist, textColor);
-            }
-        }
-        else {
-            MAP_GPIO_setOutputLowOnPin(GPIO_PORT_P6, GPIO_PIN1);
-            textColor = ST7735_GREEN;
-            ST7735_DrawString(2, 8,dist, textColor);
-            count = 0;
-        }
-    }
 }
 
 void TA0_N_IRQHandler(void)
