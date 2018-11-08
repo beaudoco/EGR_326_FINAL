@@ -57,226 +57,132 @@
 #include <msp.h>
 #include <stdlib.h>
 
-#define NUM_OF_REC_BYTES    10
-#define SIZE_ARRAY          25
-#define NUMBER_ARRAY        5
-#define CALIBRATION_START   0x000200000         // CALIBRATION START
+//const Timer_A_CaptureModeConfig captureModeConfig =
+//{
+//     TIMER_A_CAPTURECOMPARE_REGISTER_1,             // CC Register 1
+//     TIMER_A_CAPTUREMODE_RISING_AND_FALLING_EDGE,   // Rising Edge and Falling
+//     TIMER_A_CAPTURE_INPUTSELECT_CCIxA,             // CCIxA Input Select
+//     TIMER_A_CAPTURE_SYNCHRONOUS,                   // Synchronized Capture
+//     TIMER_A_CAPTURECOMPARE_INTERRUPT_ENABLE,       // Enable Interrupt
+//     TIMER_A_OUTPUTMODE_OUTBITVALUE                 // Output bit value
+//};
+//
+//const Timer_A_ContinuousModeConfig continuousModeConfig =
+//{
+//     TIMER_A_CLOCKSOURCE_SMCLK,         // SMCLK Clock Source
+//     TIMER_A_CLOCKSOURCE_DIVIDER_1,     // SMCLK/1 = 3MHz
+//     TIMER_A_TAIE_INTERRUPT_DISABLE,    // Disable Timer ISR
+//     TIMER_A_SKIP_CLEAR                 // SKIP CLEAR COUNTER
+//};
 
-int sysTikToggleSpeed = 15000;
-int msDelay           = 25;
-int firstRead         = 1;
-
-uint8_t row, col, value, key;
-uint8_t textSize  = 4;
-
-uint8_t inline convertToBCD(uint8_t dec) {return (dec%10) | (((dec/10)%10) << 4);}
-uint8_t inline convertFromBCD(uint8_t bcd) {return (bcd & 0x0F) + (((bcd & 0xF0)>>4) * 10);}
+int delay    = 150;
+int distance = 0;
+int meas1    = 0;
+int meas2    = 0;
+int count    = 0;
 
 uint16_t textColor = ST7735_GREEN;
 uint16_t bgColor   = ST7735_BLACK;
 
-char timeArr1[25];
-char timeArr2[25];
-char timeArr3[25];
-char timeArr4[25];
-char timeArr5[25];
-char RTC_registers[20];
-
-void readFromSlave(void);
-void printTime(void);
+//void timerAInit(void);
+void controlLED(int distance);
 
 int main(void)
 {
     /* Halting the Watchdog */
     MAP_WDT_A_holdTimer();
 
-    COMMONCLOCKS_sysTick_Init();                                // Systick Init
-    KEYPAD_port_Init();                                                // Port Init
-    RTC_iicInit();                                                  // Init iic to RTC
-    COMMONCLOCKS_initClocks();
+    MAP_GPIO_setAsOutputPin(GPIO_PORT_P6, GPIO_PIN1);
+
+    COMMONCLOCKS_sysTick_Init();                                        // Systick Init
+
+    MAP_GPIO_setAsPeripheralModuleFunctionOutputPin(GPIO_PORT_PJ, GPIO_PIN3 | GPIO_PIN4, GPIO_PRIMARY_MODULE_FUNCTION); // Configuring pins for XTL usage
+    MAP_CS_setExternalClockSourceFrequency(32000,48000000);                                                             // Setting external clock frequency
+    MAP_PCM_setCoreVoltageLevel(PCM_VCORE1);                                                                            // Starting HFXT
+    MAP_FlashCtl_setWaitState(FLASH_BANK0, 2);
+    MAP_FlashCtl_setWaitState(FLASH_BANK1, 2);
+    MAP_CS_startHFXT(false);
+    CS_setDCOCenteredFrequency(CS_DCO_FREQUENCY_24);                    // 24000000 Hz
+    CS_initClockSignal(CS_MCLK,  CS_DCOCLK_SELECT, CS_CLOCK_DIVIDER_1); // 24000000 Hz
+    CS_initClockSignal(CS_SMCLK, CS_DCOCLK_SELECT, CS_CLOCK_DIVIDER_8); //  3000000 Hz
 
     ST7735_InitR(INITR_REDTAB);
     ST7735_FillScreen(0);
     ST7735_FillScreen(bgColor);
-    //RTC_setTime();                                                  // set time variable for RTC
-    ST7735_DrawString(0, 0, "Enter * to view", ST7735_YELLOW);
-    ST7735_DrawString(0, 1, "previous times.", ST7735_YELLOW);
+
+    /* Configuring P2.4 as peripheral input for capture */
+    GPIO_setAsPeripheralModuleFunctionInputPin(GPIO_PORT_P2, GPIO_PIN4, GPIO_PRIMARY_MODULE_FUNCTION);
+    GPIO_setAsOutputPin(GPIO_PORT_P1, GPIO_PIN5);
+
+    COMMONCLOCKS_timerAInit();
+
+    /* Starting the Timer32 */
+    Timer32_initModule(TIMER32_0_BASE, TIMER32_PRESCALER_1, TIMER32_32BIT, TIMER32_PERIODIC_MODE);
+    Timer32_disableInterrupt(TIMER32_0_BASE);
+    Timer32_setCount(TIMER32_0_BASE, 1);
+    Timer32_startTimer(TIMER32_0_BASE, true);
+
+    /* Starting the Timer_A0 in continuous mode */
+    Timer_A_startCounter(TIMER_A0_BASE, TIMER_A_CONTINUOUS_MODE);
 
     while (1)
     {
-        key = KEYPAD_getKey();
+        GPIO_setOutputHighOnPin(GPIO_PORT_P1, GPIO_PIN5);
+        Timer32_setCount(TIMER32_0_BASE, 24 * 10);
+        while (Timer32_getValue(TIMER32_0_BASE) > 0);       // Wait 10us
+        GPIO_setOutputLowOnPin(GPIO_PORT_P1, GPIO_PIN5);
 
-        if(key == 10) {
-            uint8_t i;                                                                                      // index
-            COMMONCLOCKS_sysTick_delay_48MHZ(msDelay);                                                      // Setting MCLK to 48MHz for faster programming
-            uint8_t* addr_pointer = CALIBRATION_START+4;                                                             // point to address in flash for saving data
-
-//            for(i=0; i<25; i++) {                                                                           // read values in flash before programming
-//                timeArr1[i] = *addr_pointer++;
-//            }
-//
-//            for(i=0; i<25; i++) {                                                                           // read values in flash before programming
-//                timeArr2[i] = *addr_pointer++;
-//            }
-//
-//            for(i=0; i<25; i++) {                                                                           // read values in flash before programming
-//                timeArr3[i] = *addr_pointer++;
-//            }
-//
-//            for(i=0; i<25; i++) {                                                                           // read values in flash before programming
-//                timeArr4[i] = *addr_pointer++;
-//            }
-//
-//            for(i=0; i<25; i++) {                                                                           // read values in flash before programming
-//                timeArr5[i] = *addr_pointer++;
-//            }
-
-            addr_pointer = CALIBRATION_START+4;                                                             // point to address in flash for saved data
-
-            printTime();
-
-            fflush(stdout);
-        }
+        distance = (((meas2-meas1) *340)/60000)*.393701;
+        controlLED(distance);
+        COMMONCLOCKS_sysTick_delay_3MHZ(delay);
+       // printf("%d\n",distance);
 
     } // end of main while(1)
 }
 
-void printTime() {
+//void timerAInit(void)
+//{
+//    Timer_A_initCapture(TIMER_A0_BASE, &captureModeConfig);                     // Configuring Capture Mode
+//    Timer_A_configureContinuousMode(TIMER_A0_BASE, &continuousModeConfig);      // Configuring Continuous Mode
+//
+//    Interrupt_enableInterrupt(INT_TA0_N);                                       // Enabling Interrupts
+//    Interrupt_enableMaster();                                                   // Enabling Interrupts
+//}
 
-    if(firstRead){
-        readFromSlave();
-        firstRead = 0;
-    }
-    readFromSlave(); // read value from external clock
-
-    uint8_t year, month, date, day, hour, minute, second, tmpInt, tmpFrac;
-
-    year    = convertFromBCD(RTC_registers[6]);      // get year
-    month   = convertFromBCD(RTC_registers[5]);      // get month
-    date    = convertFromBCD(RTC_registers[4]);      // get date
-    day     = convertFromBCD(RTC_registers[3]);      // get day
-    hour    = convertFromBCD(RTC_registers[2]);      // get hour
-    minute  = convertFromBCD(RTC_registers[1]);      // get minute
-    second  = convertFromBCD(RTC_registers[0]);      // get second
-    tmpInt  =  RTC_registers[17];                    // get int of tempature
-    tmpFrac = (RTC_registers[18] >> 6) * 25;         // get decimal of tempature
-
-    char iHourtoC[2];
-    char iMinuteC[2];
-    char iSecondC[2];
-    char iMonthC[2];
-    char iDateC[2];
-    char iYearC[4];
-
-    sprintf(iHourtoC,"%d",hour);
-    sprintf(iMinuteC,"%d",minute);
-    sprintf(iSecondC,"%d",second);
-    sprintf(iMonthC,"%d",month);
-    sprintf(iDateC,"%d",date);
-    sprintf(iYearC,"%d",year);
-
-    int count = 0;
-    char testArray[SIZE_ARRAY]; // array to hold data
-
-    int j = 0;
-    for(j = 0; j<sizeof(iHourtoC) / sizeof(uint8_t); j++){
-        testArray[j] = iHourtoC[j];
-        count ++;
-    }
-
-    memcpy (testArray + count, ":", 1);
-    count ++;
-    memcpy (testArray + count, iMinuteC , sizeof(iMinuteC));
-    count += (sizeof(iMinuteC) / sizeof(uint8_t));
-    memcpy (testArray + count, ":", 1);
-    count ++;
-    memcpy (testArray + count, iSecondC , sizeof(iSecondC));
-    count += sizeof(iSecondC) / sizeof(uint8_t);
-    memcpy (testArray + count, " ", 1);
-    count ++;
-    memcpy (testArray + count, iMonthC , sizeof(iMonthC));
-    count += (sizeof(iMonthC) / sizeof(uint8_t));
-    memcpy (testArray + count, "/", 1);
-    count ++;
-    memcpy (testArray + count, iDateC , sizeof(iDateC));
-    count += (sizeof(iDateC) / sizeof(uint8_t));
-    memcpy (testArray + count, "/", 1);
-    count ++;
-    memcpy (testArray + count, iYearC , sizeof(iYearC));
-    count += (sizeof(iYearC) / sizeof(uint8_t));
-
-    int i = 0;
-    int r = 0;
-
-    while(timeArr4[i] != '\0'){
-        timeArr5[i] = timeArr4[i];
-        i++;
-    }
-    i = 0;
-
-    while(timeArr3[i] != '\0'){
-        timeArr4[i] = timeArr3[i];
-        i++;
-    }
-    i = 0;
-
-    while(timeArr2[i] != '\0'){
-        timeArr3[i] = timeArr2[i];
-        i++;
-    }
-    i = 0;
-
-    while(timeArr1[i] != '\0'){
-        timeArr2[i] = timeArr1[i];
-        i++;
-    }
-
-    for(i = 0; i<(sizeof(testArray) / sizeof(char)); i++) {
-
-        if(testArray[i] != '\0') {
-            timeArr1[r] = testArray[i];
-            r++;
+void controlLED(int distance) {
+    char dist[13];
+    sprintf(dist, "Distance : %d", distance);
+    if (distance <= 9 && distance >= 0) {
+        if(distance <= 3 ) {
+            if(count<20)
+                count++;
+            else {
+                MAP_GPIO_setOutputHighOnPin(GPIO_PORT_P6, GPIO_PIN1);
+                textColor = ST7735_RED;
+                ST7735_DrawString(2, 8,dist, textColor);
+            }
+        }
+        else {
+            MAP_GPIO_setOutputLowOnPin(GPIO_PORT_P6, GPIO_PIN1);
+            textColor = ST7735_GREEN;
+            ST7735_DrawString(2, 8,dist, textColor);
+            count = 0;
         }
     }
-
-    MAP_FlashCtl_unprotectSector(FLASH_INFO_MEMORY_SPACE_BANK0,FLASH_SECTOR0);                      // Unprotecting Info Bank 0, Sector 0
-
-    while(!MAP_FlashCtl_eraseSector(CALIBRATION_START));                                            // Erase the flash sector starting CALIBRATION_START.
-                                                                                                    // Program the flash with the new data.
-    while (!MAP_FlashCtl_programMemory(timeArr1,(void*) CALIBRATION_START+4, 25 ));                 // leave first 4 bytes unprogrammed
-
-    while (!MAP_FlashCtl_programMemory(timeArr2,(void*) CALIBRATION_START+4+25, 25 ));
-
-    while (!MAP_FlashCtl_programMemory(timeArr3,(void*) CALIBRATION_START+4+50, 25 ));
-
-    while (!MAP_FlashCtl_programMemory(timeArr4,(void*) CALIBRATION_START+4+75, 25 ));
-
-    while (!MAP_FlashCtl_programMemory(timeArr5,(void*) CALIBRATION_START+4+100, 25 ));
-
-    MAP_FlashCtl_protectSector(FLASH_INFO_MEMORY_SPACE_BANK0,FLASH_SECTOR0);                        // Setting the sector back to protected
-
-    ST7735_DrawString(2, 6, timeArr1, textColor);
-    ST7735_DrawString(2, 7, timeArr2, textColor);
-    ST7735_DrawString(2, 8, timeArr3, textColor);
-    ST7735_DrawString(2, 9, timeArr4, textColor);
-    ST7735_DrawString(2, 10, timeArr5, textColor);
 }
 
-void readFromSlave() {
-
-    MAP_I2C_setMode(EUSCI_B1_BASE, EUSCI_B_I2C_TRANSMIT_MODE);      // Set Master in transmit mode
-    while (MAP_I2C_isBusBusy(EUSCI_B1_BASE));                       // Wait for bus release, ready to write
-    MAP_I2C_masterSendSingleByte(EUSCI_B1_BASE,0);                  // set pointer to beginning of RTC registers
-    while (MAP_I2C_isBusBusy(EUSCI_B1_BASE));                       // Wait for bus release
-    MAP_I2C_setMode(EUSCI_B1_BASE, EUSCI_B_I2C_RECEIVE_MODE);       // Set Master in receive mode
-    while (MAP_I2C_isBusBusy(EUSCI_B1_BASE));                       // Wait for bus release, ready to receive
-
-    int i;  // read from RTC registers (pointer auto increments after each read)
-
-    for(i = 0; i < 19; i++) {
-        RTC_registers[i]=MAP_I2C_masterReceiveSingleByte(EUSCI_B1_BASE);
+void TA0_N_IRQHandler(void)
+{
+    int rising = 0;
+    if (TIMER_A0->CCTL[1] & BIT0)                                                                   // Timer A0.1 was the cause. This is setup as a capture
+        Timer_A_clearCaptureCompareInterrupt(TIMER_A0_BASE, TIMER_A_CAPTURECOMPARE_REGISTER_1);     // clear timer_A interrupt flag
+    if(P2IN&BIT4)
+        rising=1;
+    else                                                                                            // check for rising or falling edge on input
+        rising = 0;
+    if (rising) {
+        meas1 = Timer_A_getCaptureCompareCount(TIMER_A0_BASE, TIMER_A_CAPTURECOMPARE_REGISTER_1);   // read timer_A value
+    } else {
+        meas2 = Timer_A_getCaptureCompareCount(TIMER_A0_BASE, TIMER_A_CAPTURECOMPARE_REGISTER_1);
     }
-
-    while(MAP_I2C_isBusBusy(EUSCI_B1_BASE));    //Wait
-
 }
