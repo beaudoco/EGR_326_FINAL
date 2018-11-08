@@ -57,24 +57,6 @@
 #include <msp.h>
 #include <stdlib.h>
 
-//const Timer_A_CaptureModeConfig captureModeConfig =
-//{
-//     TIMER_A_CAPTURECOMPARE_REGISTER_1,             // CC Register 1
-//     TIMER_A_CAPTUREMODE_RISING_AND_FALLING_EDGE,   // Rising Edge and Falling
-//     TIMER_A_CAPTURE_INPUTSELECT_CCIxA,             // CCIxA Input Select
-//     TIMER_A_CAPTURE_SYNCHRONOUS,                   // Synchronized Capture
-//     TIMER_A_CAPTURECOMPARE_INTERRUPT_ENABLE,       // Enable Interrupt
-//     TIMER_A_OUTPUTMODE_OUTBITVALUE                 // Output bit value
-//};
-//
-//const Timer_A_ContinuousModeConfig continuousModeConfig =
-//{
-//     TIMER_A_CLOCKSOURCE_SMCLK,         // SMCLK Clock Source
-//     TIMER_A_CLOCKSOURCE_DIVIDER_1,     // SMCLK/1 = 3MHz
-//     TIMER_A_TAIE_INTERRUPT_DISABLE,    // Disable Timer ISR
-//     TIMER_A_SKIP_CLEAR                 // SKIP CLEAR COUNTER
-//};
-
 int delay    = 150;
 int distance = 0;
 int meas1    = 0;
@@ -84,7 +66,6 @@ int count    = 0;
 uint16_t textColor = ST7735_GREEN;
 uint16_t bgColor   = ST7735_BLACK;
 
-//void timerAInit(void);
 void controlLED(int distance);
 
 int main(void)
@@ -139,15 +120,6 @@ int main(void)
 
     } // end of main while(1)
 }
-
-//void timerAInit(void)
-//{
-//    Timer_A_initCapture(TIMER_A0_BASE, &captureModeConfig);                     // Configuring Capture Mode
-//    Timer_A_configureContinuousMode(TIMER_A0_BASE, &continuousModeConfig);      // Configuring Continuous Mode
-//
-//    Interrupt_enableInterrupt(INT_TA0_N);                                       // Enabling Interrupts
-//    Interrupt_enableMaster();                                                   // Enabling Interrupts
-//}
 
 void controlLED(int distance) {
     char dist[13];
