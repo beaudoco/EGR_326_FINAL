@@ -69,7 +69,7 @@ int firstRead         = 1;
 uint8_t row, col, value, key;
 uint8_t textSize  = 4;
 
-uint8_t inline convertToBCD(uint8_t dec) {return (dec%10) | (((dec/10)%10) << 4);}
+//uint8_t inline convertToBCD(uint8_t dec) {return (dec%10) | (((dec/10)%10) << 4);}
 uint8_t inline convertFromBCD(uint8_t bcd) {return (bcd & 0x0F) + (((bcd & 0xF0)>>4) * 10);}
 
 uint16_t textColor = ST7735_GREEN;
@@ -111,25 +111,25 @@ int main(void)
             COMMONCLOCKS_sysTick_delay_48MHZ(msDelay);                                                      // Setting MCLK to 48MHz for faster programming
             uint8_t* addr_pointer = CALIBRATION_START+4;                                                             // point to address in flash for saving data
 
-//            for(i=0; i<25; i++) {                                                                           // read values in flash before programming
-//                timeArr1[i] = *addr_pointer++;
-//            }
-//
-//            for(i=0; i<25; i++) {                                                                           // read values in flash before programming
-//                timeArr2[i] = *addr_pointer++;
-//            }
-//
-//            for(i=0; i<25; i++) {                                                                           // read values in flash before programming
-//                timeArr3[i] = *addr_pointer++;
-//            }
-//
-//            for(i=0; i<25; i++) {                                                                           // read values in flash before programming
-//                timeArr4[i] = *addr_pointer++;
-//            }
-//
-//            for(i=0; i<25; i++) {                                                                           // read values in flash before programming
-//                timeArr5[i] = *addr_pointer++;
-//            }
+            for(i=0; i<25; i++) {                                                                           // read values in flash before programming
+                timeArr1[i] = *addr_pointer++;
+            }
+
+            for(i=0; i<25; i++) {                                                                           // read values in flash before programming
+                timeArr2[i] = *addr_pointer++;
+            }
+
+            for(i=0; i<25; i++) {                                                                           // read values in flash before programming
+                timeArr3[i] = *addr_pointer++;
+            }
+
+            for(i=0; i<25; i++) {                                                                           // read values in flash before programming
+                timeArr4[i] = *addr_pointer++;
+            }
+
+            for(i=0; i<25; i++) {                                                                           // read values in flash before programming
+                timeArr5[i] = *addr_pointer++;
+            }
 
             addr_pointer = CALIBRATION_START+4;                                                             // point to address in flash for saved data
 
@@ -208,11 +208,15 @@ void printTime() {
     int i = 0;
     int r = 0;
 
+    memset(timeArr5,' ',SIZE_ARRAY);
+
     while(timeArr4[i] != '\0'){
         timeArr5[i] = timeArr4[i];
         i++;
     }
     i = 0;
+
+    memset(timeArr4,' ',SIZE_ARRAY);
 
     while(timeArr3[i] != '\0'){
         timeArr4[i] = timeArr3[i];
@@ -220,16 +224,22 @@ void printTime() {
     }
     i = 0;
 
+    memset(timeArr3,' ',SIZE_ARRAY);
+
     while(timeArr2[i] != '\0'){
         timeArr3[i] = timeArr2[i];
         i++;
     }
     i = 0;
 
+    memset(timeArr2,' ',SIZE_ARRAY);
+
     while(timeArr1[i] != '\0'){
         timeArr2[i] = timeArr1[i];
         i++;
     }
+
+    memset(timeArr1,' ',SIZE_ARRAY);
 
     for(i = 0; i<(sizeof(testArray) / sizeof(char)); i++) {
 

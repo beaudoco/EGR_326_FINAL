@@ -30,6 +30,8 @@ const eUSCI_I2C_MasterConfig i2cConfig =
 
 uint8_t bcdSecond, bcdMinute, bcdHour, bcdDay, bcdDate, bcdMonth, bcdYear;
 
+uint8_t inline convertToBCD(uint8_t dec) {return (dec%10) | (((dec/10)%10) << 4);}
+
 void RTC_iicInit() {
 
     // For example, select Port 6 for I2C
