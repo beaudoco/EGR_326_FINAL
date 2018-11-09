@@ -62,7 +62,6 @@
 #define NUMBER_ARRAY        5
 #define CALIBRATION_START   0x000200000         // CALIBRATION START
 
-int sysTikToggleSpeed = 15000;
 int msDelay           = 25;
 int firstRead         = 1;
 
