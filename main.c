@@ -66,24 +66,15 @@ int sysTikToggleSpeed = 15000;
 int msDelay           = 25;
 int firstRead         = 1;
 
-uint8_t row, col, value, key;
 uint8_t textSize  = 4;
 
-//uint8_t inline convertToBCD(uint8_t dec) {return (dec%10) | (((dec/10)%10) << 4);}
-uint8_t inline convertFromBCD(uint8_t bcd) {return (bcd & 0x0F) + (((bcd & 0xF0)>>4) * 10);}
-
-uint16_t textColor = ST7735_GREEN;
 uint16_t bgColor   = ST7735_BLACK;
 
-char timeArr1[25];
-char timeArr2[25];
-char timeArr3[25];
-char timeArr4[25];
-char timeArr5[25];
-char RTC_registers[20];
-
-void readFromSlave(void);
-void printTime(void);
+char timeArr1[SIZE_ARRAY];
+char timeArr2[SIZE_ARRAY];
+char timeArr3[SIZE_ARRAY];
+char timeArr4[SIZE_ARRAY];
+char timeArr5[SIZE_ARRAY];
 
 int main(void)
 {
@@ -133,160 +124,10 @@ int main(void)
 
             addr_pointer = CALIBRATION_START+4;                                                             // point to address in flash for saved data
 
-            printTime();
+            KEYPAD_printTime(&firstRead, timeArr1, timeArr2, timeArr3, timeArr4, timeArr5);
 
             fflush(stdout);
         }
 
     } // end of main while(1)
-}
-
-void printTime() {
-
-    if(firstRead){
-        readFromSlave();
-        firstRead = 0;
-    }
-    readFromSlave(); // read value from external clock
-
-    uint8_t year, month, date, day, hour, minute, second, tmpInt, tmpFrac;
-
-    year    = convertFromBCD(RTC_registers[6]);      // get year
-    month   = convertFromBCD(RTC_registers[5]);      // get month
-    date    = convertFromBCD(RTC_registers[4]);      // get date
-    day     = convertFromBCD(RTC_registers[3]);      // get day
-    hour    = convertFromBCD(RTC_registers[2]);      // get hour
-    minute  = convertFromBCD(RTC_registers[1]);      // get minute
-    second  = convertFromBCD(RTC_registers[0]);      // get second
-    tmpInt  =  RTC_registers[17];                    // get int of tempature
-    tmpFrac = (RTC_registers[18] >> 6) * 25;         // get decimal of tempature
-
-    char iHourtoC[2];
-    char iMinuteC[2];
-    char iSecondC[2];
-    char iMonthC[2];
-    char iDateC[2];
-    char iYearC[4];
-
-    sprintf(iHourtoC,"%d",hour);
-    sprintf(iMinuteC,"%d",minute);
-    sprintf(iSecondC,"%d",second);
-    sprintf(iMonthC,"%d",month);
-    sprintf(iDateC,"%d",date);
-    sprintf(iYearC,"%d",year);
-
-    int count = 0;
-    char testArray[SIZE_ARRAY]; // array to hold data
-
-    int j = 0;
-    for(j = 0; j<sizeof(iHourtoC) / sizeof(uint8_t); j++){
-        testArray[j] = iHourtoC[j];
-        count ++;
-    }
-
-    memcpy (testArray + count, ":", 1);
-    count ++;
-    memcpy (testArray + count, iMinuteC , sizeof(iMinuteC));
-    count += (sizeof(iMinuteC) / sizeof(uint8_t));
-    memcpy (testArray + count, ":", 1);
-    count ++;
-    memcpy (testArray + count, iSecondC , sizeof(iSecondC));
-    count += sizeof(iSecondC) / sizeof(uint8_t);
-    memcpy (testArray + count, " ", 1);
-    count ++;
-    memcpy (testArray + count, iMonthC , sizeof(iMonthC));
-    count += (sizeof(iMonthC) / sizeof(uint8_t));
-    memcpy (testArray + count, "/", 1);
-    count ++;
-    memcpy (testArray + count, iDateC , sizeof(iDateC));
-    count += (sizeof(iDateC) / sizeof(uint8_t));
-    memcpy (testArray + count, "/", 1);
-    count ++;
-    memcpy (testArray + count, iYearC , sizeof(iYearC));
-    count += (sizeof(iYearC) / sizeof(uint8_t));
-
-    int i = 0;
-    int r = 0;
-
-    memset(timeArr5,' ',SIZE_ARRAY);
-
-    while(timeArr4[i] != '\0'){
-        timeArr5[i] = timeArr4[i];
-        i++;
-    }
-    i = 0;
-
-    memset(timeArr4,' ',SIZE_ARRAY);
-
-    while(timeArr3[i] != '\0'){
-        timeArr4[i] = timeArr3[i];
-        i++;
-    }
-    i = 0;
-
-    memset(timeArr3,' ',SIZE_ARRAY);
-
-    while(timeArr2[i] != '\0'){
-        timeArr3[i] = timeArr2[i];
-        i++;
-    }
-    i = 0;
-
-    memset(timeArr2,' ',SIZE_ARRAY);
-
-    while(timeArr1[i] != '\0'){
-        timeArr2[i] = timeArr1[i];
-        i++;
-    }
-
-    memset(timeArr1,' ',SIZE_ARRAY);
-
-    for(i = 0; i<(sizeof(testArray) / sizeof(char)); i++) {
-
-        if(testArray[i] != '\0') {
-            timeArr1[r] = testArray[i];
-            r++;
-        }
-    }
-
-    MAP_FlashCtl_unprotectSector(FLASH_INFO_MEMORY_SPACE_BANK0,FLASH_SECTOR0);                      // Unprotecting Info Bank 0, Sector 0
-
-    while(!MAP_FlashCtl_eraseSector(CALIBRATION_START));                                            // Erase the flash sector starting CALIBRATION_START.
-                                                                                                    // Program the flash with the new data.
-    while (!MAP_FlashCtl_programMemory(timeArr1,(void*) CALIBRATION_START+4, 25 ));                 // leave first 4 bytes unprogrammed
-
-    while (!MAP_FlashCtl_programMemory(timeArr2,(void*) CALIBRATION_START+4+25, 25 ));
-
-    while (!MAP_FlashCtl_programMemory(timeArr3,(void*) CALIBRATION_START+4+50, 25 ));
-
-    while (!MAP_FlashCtl_programMemory(timeArr4,(void*) CALIBRATION_START+4+75, 25 ));
-
-    while (!MAP_FlashCtl_programMemory(timeArr5,(void*) CALIBRATION_START+4+100, 25 ));
-
-    MAP_FlashCtl_protectSector(FLASH_INFO_MEMORY_SPACE_BANK0,FLASH_SECTOR0);                        // Setting the sector back to protected
-
-    ST7735_DrawString(2, 6, timeArr1, textColor);
-    ST7735_DrawString(2, 7, timeArr2, textColor);
-    ST7735_DrawString(2, 8, timeArr3, textColor);
-    ST7735_DrawString(2, 9, timeArr4, textColor);
-    ST7735_DrawString(2, 10, timeArr5, textColor);
-}
-
-void readFromSlave() {
-
-    MAP_I2C_setMode(EUSCI_B1_BASE, EUSCI_B_I2C_TRANSMIT_MODE);      // Set Master in transmit mode
-    while (MAP_I2C_isBusBusy(EUSCI_B1_BASE));                       // Wait for bus release, ready to write
-    MAP_I2C_masterSendSingleByte(EUSCI_B1_BASE,0);                  // set pointer to beginning of RTC registers
-    while (MAP_I2C_isBusBusy(EUSCI_B1_BASE));                       // Wait for bus release
-    MAP_I2C_setMode(EUSCI_B1_BASE, EUSCI_B_I2C_RECEIVE_MODE);       // Set Master in receive mode
-    while (MAP_I2C_isBusBusy(EUSCI_B1_BASE));                       // Wait for bus release, ready to receive
-
-    int i;  // read from RTC registers (pointer auto increments after each read)
-
-    for(i = 0; i < 19; i++) {
-        RTC_registers[i]=MAP_I2C_masterReceiveSingleByte(EUSCI_B1_BASE);
-    }
-
-    while(MAP_I2C_isBusBusy(EUSCI_B1_BASE));    //Wait
-
 }
