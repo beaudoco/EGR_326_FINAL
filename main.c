@@ -58,75 +58,121 @@
 #include <msp.h>
 #include <stdlib.h>
 
-int delay    = 150;
-int distance = 0;
-int meas1    = 0;
-int meas2    = 0;
-int count    = 0;
+// Statics
+static volatile uint16_t curADCResult;
+static volatile float normalizedADCRes;
 
-uint16_t bgColor   = ST7735_BLACK;
+void sysTick_Init();
+void sysTick_delay(uint16_t delay);
+void ADC_Init();
+void PWM();
+void PWM_Init();
 
+int   flag = 0;
+float dc   = 75;
+
+// Timer_A PWM Configuration Parameter
+Timer_A_PWMConfig pwmConfig = { TIMER_A_CLOCKSOURCE_SMCLK,
+                                TIMER_A_CLOCKSOURCE_DIVIDER_1,
+                                6400,
+                                TIMER_A_CAPTURECOMPARE_REGISTER_1,
+                                TIMER_A_OUTPUTMODE_RESET_SET,
+                                3200 };
 int main(void)
 {
-    /* Halting the Watchdog */
-    MAP_WDT_A_holdTimer();
+    MAP_WDT_A_holdTimer();              // Halting the Watchdog
+    curADCResult = 0;
 
-    MAP_GPIO_setAsOutputPin(GPIO_PORT_P6, GPIO_PIN1);
-
-    COMMONCLOCKS_sysTick_Init();                                        // Systick Init
-
-    MAP_GPIO_setAsPeripheralModuleFunctionOutputPin(GPIO_PORT_PJ, GPIO_PIN3 | GPIO_PIN4, GPIO_PRIMARY_MODULE_FUNCTION); // Configuring pins for XTL usage
-    MAP_CS_setExternalClockSourceFrequency(32000,48000000);                                                             // Setting external clock frequency
-    MAP_PCM_setCoreVoltageLevel(PCM_VCORE1);                                                                            // Starting HFXT
-    MAP_FlashCtl_setWaitState(FLASH_BANK0, 2);
-    MAP_FlashCtl_setWaitState(FLASH_BANK1, 2);
-    MAP_CS_startHFXT(false);
-    CS_setDCOCenteredFrequency(CS_DCO_FREQUENCY_24);                    // 24000000 Hz
-    CS_initClockSignal(CS_MCLK,  CS_DCOCLK_SELECT, CS_CLOCK_DIVIDER_1); // 24000000 Hz
-    CS_initClockSignal(CS_SMCLK, CS_DCOCLK_SELECT, CS_CLOCK_DIVIDER_8); //  3000000 Hz
-
-    ST7735_InitR(INITR_REDTAB);
-    ST7735_FillScreen(0);
-    ST7735_FillScreen(bgColor);
-
-    /* Configuring P2.4 as peripheral input for capture */
-    GPIO_setAsPeripheralModuleFunctionInputPin(GPIO_PORT_P2, GPIO_PIN4, GPIO_PRIMARY_MODULE_FUNCTION);
-    GPIO_setAsOutputPin(GPIO_PORT_P1, GPIO_PIN5);
-
-    COMMONCLOCKS_timerAInit();
-
-    COMMONCLOCKS_Timer32_Setup();
-
-    /* Starting the Timer_A0 in continuous mode */
-    Timer_A_startCounter(TIMER_A0_BASE, TIMER_A_CONTINUOUS_MODE);
+    sysTick_Init();                     // Initializing systick timer
+    ADC_Init    ();                     // ADC Initialization
+    PWM_Init    ();                     // Pulse Width Modulation Initialization
 
     while (1)
     {
-        GPIO_setOutputHighOnPin(GPIO_PORT_P1, GPIO_PIN5);
-        Timer32_setCount(TIMER32_0_BASE, 24 * 10);
-        while (Timer32_getValue(TIMER32_0_BASE) > 0);       // Wait 10us
-        GPIO_setOutputLowOnPin(GPIO_PORT_P1, GPIO_PIN5);
-
-        distance = (((meas2-meas1) *340)/60000)*.393701;
-        LCD_controlLCD(distance,&count);
-        COMMONCLOCKS_sysTick_delay_3MHZ(delay);
-       // printf("%d\n",distance);
-
-    } // end of main while(1)
+        if(flag == 1)
+        {
+            sysTick_delay(500);         // delay 500 ms
+            PWM();                      // Set dc and Trigger PWM
+            flag = 0;                   // reset flag.
+        }
+    }
 }
 
-void TA0_N_IRQHandler(void)
+void ADC14_IRQHandler(void)     // ADC Interrupt Handler. This handler is called whenever there is a conversion that is finished for ADC_MEMM0
 {
-    int rising = 0;
-    if (TIMER_A0->CCTL[1] & BIT0)                                                                   // Timer A0.1 was the cause. This is setup as a capture
-        Timer_A_clearCaptureCompareInterrupt(TIMER_A0_BASE, TIMER_A_CAPTURECOMPARE_REGISTER_1);     // clear timer_A interrupt flag
-    if(P2IN&BIT4)
-        rising=1;
-    else                                                                                            // check for rising or falling edge on input
-        rising = 0;
-    if (rising) {
-        meas1 = Timer_A_getCaptureCompareCount(TIMER_A0_BASE, TIMER_A_CAPTURECOMPARE_REGISTER_1);   // read timer_A value
-    } else {
-        meas2 = Timer_A_getCaptureCompareCount(TIMER_A0_BASE, TIMER_A_CAPTURECOMPARE_REGISTER_1);
+  uint64_t status = MAP_ADC14_getEnabledInterruptStatus();
+  flag            = 1;
+  MAP_ADC14_clearInterruptFlag(status);
+    if (ADC_INT0 & status)
+    {
+     curADCResult     = MAP_ADC14_getResult(ADC_MEM0);
+     normalizedADCRes = (curADCResult * 3.3) / 16384;
+     MAP_ADC14_toggleConversionTrigger();
     }
+}
+void sysTick_Init()
+{
+    SysTick -> CTRL = 0;                            // Disable SysTick during setup
+    SysTick -> LOAD = 0x00FFFFFF;                   // Max reload value
+    SysTick -> VAL  = 0;                            // Clear current value
+    SysTick -> CTRL = 0x00000005;                   // Enable Systick, CPU clk, no interrupts
+}
+
+void sysTick_delay(uint16_t delay)
+{
+    SysTick -> LOAD = ((delay*3000) - 1);           // 1 ms * delay, counts down to 0
+    SysTick -> VAL  = 0;                            // clear value
+    while((SysTick -> CTRL & 0x00010000) == 0);     // Wait for flag to be set
+}
+void ADC_Init(void) {
+
+    // Setting Flash wait state
+    MAP_FlashCtl_setWaitState(FLASH_BANK0, 2);
+    MAP_FlashCtl_setWaitState(FLASH_BANK1, 2);
+
+    // Setting DCO to 48MHz
+    MAP_PCM_setPowerState(PCM_AM_LDO_VCORE1);
+    MAP_CS_setDCOCenteredFrequency(CS_DCO_FREQUENCY_48);
+
+    // Enabling the FPU for floating point operation
+    MAP_FPU_enableModule();
+    MAP_FPU_enableLazyStacking();
+
+    // Initializing ADC (MCLK/1/4)
+    MAP_ADC14_enableModule();
+    MAP_ADC14_initModule(ADC_CLOCKSOURCE_MCLK, ADC_PREDIVIDER_1, ADC_DIVIDER_4, 0);
+
+    // Configuring GPIOs (5.5 A0)
+    MAP_GPIO_setAsPeripheralModuleFunctionInputPin(GPIO_PORT_P5, GPIO_PIN5, GPIO_TERTIARY_MODULE_FUNCTION);
+
+    // Configuring ADC Memory
+    MAP_ADC14_configureSingleSampleMode(ADC_MEM0, true);
+    MAP_ADC14_configureConversionMemory(ADC_MEM0, ADC_VREFPOS_AVCC_VREFNEG_VSS, ADC_INPUT_A0, false);
+
+    // Configuring Sample Timer
+    MAP_ADC14_enableSampleTimer(ADC_MANUAL_ITERATION);
+
+    // Enabling/Toggling Conversion
+    MAP_ADC14_enableConversion();
+    MAP_ADC14_toggleConversionTrigger();
+
+    // Enabling interrupts
+    MAP_ADC14_enableInterrupt(ADC_INT0);
+    MAP_Interrupt_enableInterrupt(INT_ADC14);
+    MAP_Interrupt_enableMaster();
+}
+
+void PWM()
+{
+    dc = (normalizedADCRes/3.3);                        // Equation for get dc
+    //    TIMER_A0 -> CCR[0]  = 500 - 1;                         // PWM Period, 500 Hz frequency
+    //    TIMER_A0 -> CCTL[1] = TIMER_A_CCTLN_OUTMOD_7;          // Timer_A1 Capture/Compare Control 1 Register, Reset/Set output mode
+    //    TIMER_A0 -> CCR[1]  = dc * 100;                        // PWM duty cycle
+    pwmConfig.dutyCycle = dc * 6400;                    // changing the duty cycle
+
+    MAP_Timer_A_generatePWM(TIMER_A0_BASE, &pwmConfig); // Generating a PWM
+}
+void PWM_Init() {
+MAP_GPIO_setAsPeripheralModuleFunctionOutputPin(GPIO_PORT_P2,GPIO_PIN4, GPIO_PRIMARY_MODULE_FUNCTION); //Configuring GPIO2.4 as peripheral output for PWM  and P6.7 for button * interrupt
+    MAP_Timer_A_generatePWM(TIMER_A0_BASE, &pwmConfig); // Configuring Timer_A to have a period of approximately 500ms and an initial duty cycle of 10% of that (3200 ticks)
 }
