@@ -8,6 +8,6 @@
 #ifndef LIGHTSENSOR_H_
 #define LIGHTSENSOR_H_
 
-
+void LIGHTSENSOR_ADC_Init(void);
 
 #endif /* LIGHTSENSOR_H_ */

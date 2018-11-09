@@ -55,6 +55,7 @@
 #include "ST7735.h"
 #include "RTC.h"
 #include "LCD.h"
+#include "LIGHTSENSOR.h"
 #include <msp.h>
 #include <stdlib.h>
 
@@ -62,9 +63,6 @@
 static volatile uint16_t curADCResult;
 static volatile float normalizedADCRes;
 
-void sysTick_Init();
-void sysTick_delay(uint16_t delay);
-void ADC_Init();
 void PWM();
 void PWM_Init();
 
@@ -83,15 +81,15 @@ int main(void)
     MAP_WDT_A_holdTimer();              // Halting the Watchdog
     curADCResult = 0;
 
-    sysTick_Init();                     // Initializing systick timer
-    ADC_Init    ();                     // ADC Initialization
+    COMMONCLOCKS_sysTick_Init();                     // Initializing systick timer
+    LIGHTSENSOR_ADC_Init    ();                     // ADC Initialization
     PWM_Init    ();                     // Pulse Width Modulation Initialization
 
     while (1)
     {
         if(flag == 1)
         {
-            sysTick_delay(500);         // delay 500 ms
+            COMMONCLOCKS_sysTick_delay_3MHZ(500);         // delay 500 ms
             PWM();                      // Set dc and Trigger PWM
             flag = 0;                   // reset flag.
         }
@@ -110,57 +108,6 @@ void ADC14_IRQHandler(void)     // ADC Interrupt Handler. This handler is called
      MAP_ADC14_toggleConversionTrigger();
     }
 }
-void sysTick_Init()
-{
-    SysTick -> CTRL = 0;                            // Disable SysTick during setup
-    SysTick -> LOAD = 0x00FFFFFF;                   // Max reload value
-    SysTick -> VAL  = 0;                            // Clear current value
-    SysTick -> CTRL = 0x00000005;                   // Enable Systick, CPU clk, no interrupts
-}
-
-void sysTick_delay(uint16_t delay)
-{
-    SysTick -> LOAD = ((delay*3000) - 1);           // 1 ms * delay, counts down to 0
-    SysTick -> VAL  = 0;                            // clear value
-    while((SysTick -> CTRL & 0x00010000) == 0);     // Wait for flag to be set
-}
-void ADC_Init(void) {
-
-    // Setting Flash wait state
-    MAP_FlashCtl_setWaitState(FLASH_BANK0, 2);
-    MAP_FlashCtl_setWaitState(FLASH_BANK1, 2);
-
-    // Setting DCO to 48MHz
-    MAP_PCM_setPowerState(PCM_AM_LDO_VCORE1);
-    MAP_CS_setDCOCenteredFrequency(CS_DCO_FREQUENCY_48);
-
-    // Enabling the FPU for floating point operation
-    MAP_FPU_enableModule();
-    MAP_FPU_enableLazyStacking();
-
-    // Initializing ADC (MCLK/1/4)
-    MAP_ADC14_enableModule();
-    MAP_ADC14_initModule(ADC_CLOCKSOURCE_MCLK, ADC_PREDIVIDER_1, ADC_DIVIDER_4, 0);
-
-    // Configuring GPIOs (5.5 A0)
-    MAP_GPIO_setAsPeripheralModuleFunctionInputPin(GPIO_PORT_P5, GPIO_PIN5, GPIO_TERTIARY_MODULE_FUNCTION);
-
-    // Configuring ADC Memory
-    MAP_ADC14_configureSingleSampleMode(ADC_MEM0, true);
-    MAP_ADC14_configureConversionMemory(ADC_MEM0, ADC_VREFPOS_AVCC_VREFNEG_VSS, ADC_INPUT_A0, false);
-
-    // Configuring Sample Timer
-    MAP_ADC14_enableSampleTimer(ADC_MANUAL_ITERATION);
-
-    // Enabling/Toggling Conversion
-    MAP_ADC14_enableConversion();
-    MAP_ADC14_toggleConversionTrigger();
-
-    // Enabling interrupts
-    MAP_ADC14_enableInterrupt(ADC_INT0);
-    MAP_Interrupt_enableInterrupt(INT_ADC14);
-    MAP_Interrupt_enableMaster();
-}
 
 void PWM()
 {
@@ -172,6 +119,7 @@ void PWM()
 
     MAP_Timer_A_generatePWM(TIMER_A0_BASE, &pwmConfig); // Generating a PWM
 }
+
 void PWM_Init() {
 MAP_GPIO_setAsPeripheralModuleFunctionOutputPin(GPIO_PORT_P2,GPIO_PIN4, GPIO_PRIMARY_MODULE_FUNCTION); //Configuring GPIO2.4 as peripheral output for PWM  and P6.7 for button * interrupt
     MAP_Timer_A_generatePWM(TIMER_A0_BASE, &pwmConfig); // Configuring Timer_A to have a period of approximately 500ms and an initial duty cycle of 10% of that (3200 ticks)
