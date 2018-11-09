@@ -18,9 +18,7 @@
 #include <msp.h>
 #include <stdlib.h>
 
-uint16_t textColor = ST7735_GREEN;
-
-void LCD_controlLCD(int distance, int *count) {
+void LCD_controlLCD(int distance, int *count, uint16_t textColor) {
     char dist[13];
     sprintf(dist, "Distance : %d", distance);
     if (distance <= 9 && distance >= 0) {

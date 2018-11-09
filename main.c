@@ -58,13 +58,27 @@
 #include <msp.h>
 #include <stdlib.h>
 
+#define SIZE_ARRAY 25
+
 int delay    = 150;
 int distance = 0;
 int meas1    = 0;
 int meas2    = 0;
 int count    = 0;
 
+int msDelay           = 25;
+int firstRead         = 1;
+
+uint8_t textSize  = 4;
+
+uint16_t textColor = ST7735_GREEN;
 uint16_t bgColor   = ST7735_BLACK;
+
+char timeArr1[SIZE_ARRAY];
+char timeArr2[SIZE_ARRAY];
+char timeArr3[SIZE_ARRAY];
+char timeArr4[SIZE_ARRAY];
+char timeArr5[SIZE_ARRAY];
 
 int main(void)
 {
@@ -94,7 +108,6 @@ int main(void)
     GPIO_setAsOutputPin(GPIO_PORT_P1, GPIO_PIN5);
 
     COMMONCLOCKS_timerAInit();
-
     COMMONCLOCKS_Timer32_Setup();
 
     /* Starting the Timer_A0 in continuous mode */
@@ -108,7 +121,7 @@ int main(void)
         GPIO_setOutputLowOnPin(GPIO_PORT_P1, GPIO_PIN5);
 
         distance = (((meas2-meas1) *340)/60000)*.393701;
-        LCD_controlLCD(distance,&count);
+        LCD_controlLCD(distance,&count, textColor);
         COMMONCLOCKS_sysTick_delay_3MHZ(delay);
        // printf("%d\n",distance);
 

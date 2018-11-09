@@ -8,6 +8,6 @@
 #ifndef LCD_H_
 #define LCD_H_
 
-void LCD_controlLCD(int distance, int *count);
+void LCD_controlLCD(int distance, int *count, uint16_t textColor);
 
 #endif /* LCD_H_ */
