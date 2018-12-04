@@ -1,39 +1,3 @@
-/*
- * -------------------------------------------
- *    MSP432 DriverLib - v3_21_00_05 
- * -------------------------------------------
- *
- * --COPYRIGHT--,BSD,BSD
- * Copyright (c) 2016, Texas Instruments Incorporated
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- * *  Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- *
- * *  Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- *
- * *  Neither the name of Texas Instruments Incorporated nor the names of
- *    its contributors may be used to endorse or promote products derived
- *    from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
- * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
- * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
- * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
- * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
- * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
- * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
- * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * --/COPYRIGHT--*/
 /*********************************************************************
  * Name            : Collin Beaudoin & Larson
  * Date            : October 19, 2018
@@ -43,7 +7,6 @@
  * that will read and write to the RTC over the IIC bus.
  * Credited Author : Professor Krug's Lecture Notes.
  ********************************************************************/
-
 #include "driverlib.h"
 #include <stdint.h>
 #include <stdbool.h>
@@ -57,6 +20,10 @@
 #include <msp.h>
 #include <stdlib.h>
 
+void ADC_Init();
+void PWM();
+void PWM_Init();
+
 #define NUM_OF_REC_BYTES    10
 #define SIZE_ARRAY          25
 #define NUMBER_ARRAY        5
@@ -64,6 +31,9 @@
 
 int msDelay           = 25;
 int firstRead         = 1;
+int key = 0;
+int   flag = 0;
+float dc   = 75;
 
 uint8_t textSize  = 4;
 
@@ -75,6 +45,18 @@ char timeArr3[SIZE_ARRAY];
 char timeArr4[SIZE_ARRAY];
 char timeArr5[SIZE_ARRAY];
 
+// Statics
+static volatile uint16_t curADCResult;
+static volatile float normalizedADCRes;
+
+// Timer_A PWM Configuration Parameter
+Timer_A_PWMConfig pwmConfig = { TIMER_A_CLOCKSOURCE_SMCLK,
+                                TIMER_A_CLOCKSOURCE_DIVIDER_1,
+                                6400,
+                                TIMER_A_CAPTURECOMPARE_REGISTER_1,
+                                TIMER_A_OUTPUTMODE_RESET_SET,
+                                3200 };
+
 int main(void)
 {
     /* Halting the Watchdog */
@@ -84,6 +66,11 @@ int main(void)
     KEYPAD_port_Init();                                                // Port Init
     RTC_iicInit();                                                  // Init iic to RTC
     COMMONCLOCKS_initClocks();
+
+    curADCResult = 0;
+
+    ADC_Init    ();                     // ADC Initialization
+    PWM_Init    ();                     // Pulse Width Modulation Initialization
 
     ST7735_InitR(INITR_REDTAB);
     ST7735_FillScreen(0);
@@ -128,5 +115,359 @@ int main(void)
             fflush(stdout);
         }
 
+
+        if(flag == 1)
+        {
+            COMMONCLOCKS_sysTick_delay_3MHZ(500);         // delay 500 ms
+            PWM();                      // Set dc and Trigger PWM
+            flag = 0;                   // reset flag.
+        }
+
     } // end of main while(1)
 }
+
+void ADC_Init(void) {
+
+    // Setting Flash wait state
+    MAP_FlashCtl_setWaitState(FLASH_BANK0, 2);
+    MAP_FlashCtl_setWaitState(FLASH_BANK1, 2);
+
+    // Setting DCO to 48MHz
+    MAP_PCM_setPowerState(PCM_AM_LDO_VCORE1);
+    MAP_CS_setDCOCenteredFrequency(CS_DCO_FREQUENCY_48);
+
+    // Enabling the FPU for floating point operation
+    MAP_FPU_enableModule();
+    MAP_FPU_enableLazyStacking();
+
+    // Initializing ADC (MCLK/1/4)
+    MAP_ADC14_enableModule();
+    MAP_ADC14_initModule(ADC_CLOCKSOURCE_MCLK, ADC_PREDIVIDER_1, ADC_DIVIDER_4, 0);
+
+    // Configuring GPIOs (5.5 A0)
+    MAP_GPIO_setAsPeripheralModuleFunctionInputPin(GPIO_PORT_P5, GPIO_PIN5, GPIO_TERTIARY_MODULE_FUNCTION);
+
+    // Configuring ADC Memory
+    MAP_ADC14_configureSingleSampleMode(ADC_MEM0, true);
+    MAP_ADC14_configureConversionMemory(ADC_MEM0, ADC_VREFPOS_AVCC_VREFNEG_VSS, ADC_INPUT_A0, false);
+
+    // Configuring Sample Timer
+    MAP_ADC14_enableSampleTimer(ADC_MANUAL_ITERATION);
+
+    // Enabling/Toggling Conversion
+    MAP_ADC14_enableConversion();
+    MAP_ADC14_toggleConversionTrigger();
+
+    // Enabling interrupts
+    MAP_ADC14_enableInterrupt(ADC_INT0);
+    MAP_Interrupt_enableInterrupt(INT_ADC14);
+    MAP_Interrupt_enableMaster();
+}
+
+void PWM()
+{
+    dc = (normalizedADCRes/3.3);                        // Equation for get dc
+    //    TIMER_A0 -> CCR[0]  = 500 - 1;                         // PWM Period, 500 Hz frequency
+    //    TIMER_A0 -> CCTL[1] = TIMER_A_CCTLN_OUTMOD_7;          // Timer_A1 Capture/Compare Control 1 Register, Reset/Set output mode
+    //    TIMER_A0 -> CCR[1]  = dc * 100;                        // PWM duty cycle
+    pwmConfig.dutyCycle = dc * 6400;                    // changing the duty cycle
+
+    MAP_Timer_A_generatePWM(TIMER_A0_BASE, &pwmConfig); // Generating a PWM
+}
+
+void PWM_Init() {
+MAP_GPIO_setAsPeripheralModuleFunctionOutputPin(GPIO_PORT_P2,GPIO_PIN4, GPIO_PRIMARY_MODULE_FUNCTION); //Configuring GPIO2.4 as peripheral output for PWM  and P6.7 for button * interrupt
+    MAP_Timer_A_generatePWM(TIMER_A0_BASE, &pwmConfig); // Configuring Timer_A to have a period of approximately 500ms and an initial duty cycle of 10% of that (3200 ticks)
+}
+
+void ADC14_IRQHandler(void)     // ADC Interrupt Handler. This handler is called whenever there is a conversion that is finished for ADC_MEMM0
+{
+  uint64_t status = MAP_ADC14_getEnabledInterruptStatus();
+  flag            = 1;
+  MAP_ADC14_clearInterruptFlag(status);
+    if (ADC_INT0 & status)
+    {
+     curADCResult     = MAP_ADC14_getResult(ADC_MEM0);
+     normalizedADCRes = (curADCResult * 3.3) / 16384;
+     MAP_ADC14_toggleConversionTrigger();
+    }
+}
+
+//#include "driverlib.h"
+//#include <stdint.h>
+//#include <stdbool.h>
+//#include <stdio.h>
+//#include <inttypes.h>
+//#include <string.h>
+//#include "COMMONCLOCKS.h"
+//#include "ST7735.h"
+//#include <msp.h>
+//#include <stdlib.h>
+//#include "MotorLib.h"
+//#include "MSPIO.h"
+//#include "UART_Driver.h"
+//#include "KEYPAD.h"
+//
+//#define BUFFER_SIZE    128
+//#define SLAVE_ADDRESS  0x48
+//
+//// Statics
+//static volatile uint16_t curADCResult;
+//static volatile float normalizedADCRes;
+//
+///*Data Buffer*/
+//char Buffer[BUFFER_SIZE];
+//
+//int dc  = 75;
+//int key = 0;
+//int   flag = 0;
+//
+//uint16_t textColorMain = ST7735_GREEN;
+//uint16_t bgColor   = ST7735_BLACK;
+//
+//uint16_t cusGrey;
+//uint16_t cusBlue;
+//uint16_t cusGreen;
+//uint16_t cusRed;
+//
+//char TXData[10] = "RGBBGRBGGR";
+//
+////void port_Init(void);
+//void initClocks(void);
+//void displayMenu(void);
+//
+//void ADC_Init();
+//void PWM();
+//void PWM_Init();
+//
+//
+////const eUSCI_I2C_MasterConfig i2cConfig =
+////{
+//// EUSCI_B_I2C_CLOCKSOURCE_SMCLK,     // SMCLK Clock Source
+//// 3000000,                           // SMCLK = 3MHz
+//// EUSCI_B_I2C_SET_DATA_RATE_100KBPS, // Desired I2C Clock of 400khz
+//// 0,                                 // No byte counter threshold
+//// EUSCI_B_I2C_NO_AUTO_STOP           // No Autostop
+////};
+//
+///* UART Configuration Parameter. These are the configuration parameters to
+// * make the eUSCI A UART module to operate with a 9600 baud rate. These
+// * values were calculated using the online calculator that TI provides
+// * at:
+// * http://software-dl.ti.com/msp430/msp430_public_sw/mcu/msp430/MSP430BaudRateConverter/index.html
+// */
+//eUSCI_UART_Config UART2Config =
+//{
+//     EUSCI_A_UART_CLOCKSOURCE_SMCLK,
+//     156,
+//     4,
+//     0,
+//     EUSCI_A_UART_NO_PARITY,
+//     EUSCI_A_UART_LSB_FIRST,
+//     EUSCI_A_UART_ONE_STOP_BIT,
+//     EUSCI_A_UART_MODE,
+//     EUSCI_A_UART_OVERSAMPLING_BAUDRATE_GENERATION
+//};
+//
+//// Timer_A PWM Configuration Parameter
+//Timer_A_PWMConfig pwmConfig = { TIMER_A_CLOCKSOURCE_SMCLK,
+//                                TIMER_A_CLOCKSOURCE_DIVIDER_1,
+//                                6400,
+//                                TIMER_A_CAPTURECOMPARE_REGISTER_1,
+//                                TIMER_A_OUTPUTMODE_RESET_SET,
+//                                3200 };
+//
+//int main(void)
+//{
+//    MAP_WDT_A_holdTimer();                      // Stop Watch dog
+//
+//    curADCResult = 0;
+//
+//    initClocks();                               // MSP432 running at 24 MHz
+//    UART_Init(EUSCI_A2_BASE, UART2Config);      // Initialize Hardware required for the HC-05
+////    port_Init();                                // Initializing ports for THIS IS EMPTY AND NOT IN PROGRAM KEEPING UNTIL USED
+//    COMMONCLOCKS_sysTick_Init();                // Initializing systick timer
+//    ST7735_InitR(INITR_REDTAB);                 // Initializing lcd
+//
+//    ADC_Init    ();                             // ADC Initialization
+//    PWM_Init    ();                             // Pulse Width Modulation Initialization
+//
+//    MOTORLIB_portInit();                        // Initializing Motor ports
+//    MOTORLIB_timerInit();                       // Initializing Timer A0 ports
+//    MOTORLIB_setLeftDC(dc);                     // Setting DC for Timer A) port
+//    MOTORLIB_setRightDC(dc);                    // Setting DC for Timer A) port
+//
+//    bgColor  = ST7735_Color565(37, 40, 48);                 // #252830
+//    cusGrey  = ST7735_Color565(207, 210, 218);              // #cfd2da
+//    cusBlue  = ST7735_Color565(28, 168, 221);               // #1ca8dd
+//    cusGreen = ST7735_Color565(27, 201, 142);               // #1bc98e
+//    cusRed   = ST7735_Color565(230, 71, 89);                // #E64759
+//
+//    void KEYPAD_port_Init();                                // initializing keypad ports
+//
+//    /*Get data from HC-05*/
+//    MSPrintf(EUSCI_A2_BASE, "Please Start Car...\r\n");
+//    //MSPgets(EUSCI_A2_BASE, Buffer, BUFFER_SIZE);            // Will hang here until it receives any input.
+//    memset(Buffer, 0, sizeof(Buffer));                      // Clearing buffer
+//
+//    ST7735_FillScreen(0);                                   // Turning on LCD
+//    ST7735_FillScreen(bgColor);                             // Setting Background
+//
+//    displayMenu();                                          // Houstan... our demo is starting
+//
+//    while(1)
+//    {
+//        key = KEYPAD_getKey();
+//        if(UART_Available(EUSCI_A2_BASE)) {
+//            MSPgets2(EUSCI_A2_BASE, Buffer, BUFFER_SIZE);
+//            /*Send data to serial terminal*/
+//            MSPrintf(EUSCI_A2_BASE, "Data received from HC-05: %s\r\n", Buffer);
+//            ST7735_DrawString(2, 8,Buffer, textColorMain);
+//            if (Buffer[0] == 'F')
+//               MOTORLIB_moveForward();
+//            else if (Buffer[0] == 'B')
+//               MOTORLIB_moveBackward();
+//            else if (Buffer[0] == 'R')
+//               MOTORLIB_moveRight();
+//            else if (Buffer[0] == 'L')
+//               MOTORLIB_moveLeft();
+//            memset(Buffer, 0, sizeof(Buffer));
+//        } else if(key != 0) {
+//            ST7735_DrawString(2, 10,"             ", bgColor);
+//            if (key == 1 ) {
+//                /* get input from keypad */
+//                /* send RTC data */
+//            } else if (key == 2) {
+//                /* loook into flash */
+//            } else if (key == 3) {
+//                /* chime & lcd go crazy */
+//            } else {
+//                ST7735_DrawString(2, 10,"Invalid Input", cusRed);
+//            }
+//        }   // end of if keypad or bluetooth
+//
+//        if(flag == 1)
+//                {
+//                    COMMONCLOCKS_sysTick_delay_3MHZ(500);         // delay 500 ms
+//                    PWM();                      // Set dc and Trigger PWM
+//                    flag = 0;                   // reset flag.
+//                }
+//
+//    }   // end of while(1)
+//
+//}   // end of main
+//
+///* 128x160; Default textSize = 1 (10px); 21*20 */
+//void displayMenu(void) {
+//    ST7735_DrawString(3, 1,"Welcome Back ;)", cusBlue);
+//    ST7735_DrawString(2, 2,"Make Selection(s)", cusGreen);
+//    ST7735_DrawString(0, 4,"1. Set Date & Time", cusGrey);
+//    ST7735_DrawString(0, 5,"2. Show Alarm History", cusGrey);
+//    ST7735_DrawString(0, 6,"3. It's my Birthday", cusGrey);
+//}
+//
+///*************************************************
+// * Initializes MCLK to run from external crystal.
+// * Code taken from lecture notes
+// ************************************************/
+////void initClocks(void)
+////{
+////    MAP_GPIO_setAsPeripheralModuleFunctionOutputPin(GPIO_PORT_PJ, GPIO_PIN3 | GPIO_PIN4, GPIO_PRIMARY_MODULE_FUNCTION); // Configuring pins for XTL usage
+////    MAP_CS_setExternalClockSourceFrequency(32000,48000000);                                                             // Setting external clock frequency
+////    MAP_PCM_setCoreVoltageLevel(PCM_VCORE1);                                                                            // Starting HFXT
+////    MAP_FlashCtl_setWaitState(FLASH_BANK0, 2);
+////    MAP_FlashCtl_setWaitState(FLASH_BANK1, 2);
+////    MAP_CS_startHFXT(false);
+////    MAP_CS_initClockSignal(CS_MCLK, CS_HFXTCLK_SELECT, CS_CLOCK_DIVIDER_1);                                             // Initializing MCLK to HFXT (48MHz)
+////    MAP_CS_initClockSignal(CS_SMCLK, CS_HFXTCLK_SELECT, CS_CLOCK_DIVIDER_4);                                            // Setting SMCLK to 12MHz (HFXT/4)
+////}
+//
+//
+//void initClocks(void)
+//{
+//   // Configuring pins for XTL usage
+//   //MAP_GPIO_setAsPeripheralModuleFunctionOutputPin(GPIO_PORT_PJ, GPIO_PIN3 | GPIO_PIN4, GPIO_PRIMARY_MODULE_FUNCTION);
+//
+//   // Setting external clock frequency
+//   //MAP_CS_setExternalClockSourceFrequency(32000,48000000);
+//
+//   // Starting HFXT
+//   MAP_PCM_setCoreVoltageLevel(PCM_VCORE1);
+//   MAP_FlashCtl_setWaitState(FLASH_BANK0, 2);
+//   MAP_FlashCtl_setWaitState(FLASH_BANK1, 2);
+//   //MAP_CS_startHFXT(false);
+//   CS_setDCOCenteredFrequency(CS_DCO_FREQUENCY_24);
+//   // Initializing MCLK to HFXT (48MHz)
+//   //MAP_CS_initClockSignal(CS_MCLK, CS_HFXTCLK_SELECT, CS_CLOCK_DIVIDER_2);
+//
+//   // Setting SMCLK to 12MHz (HFXT/4)
+//   //MAP_CS_initClockSignal(CS_SMCLK, CS_HFXTCLK_SELECT, CS_CLOCK_DIVIDER_4);
+//
+//}
+//
+//void ADC14_IRQHandler(void)     // ADC Interrupt Handler. This handler is called whenever there is a conversion that is finished for ADC_MEMM0
+//{
+//  uint64_t status = MAP_ADC14_getEnabledInterruptStatus();
+//  flag            = 1;
+//  MAP_ADC14_clearInterruptFlag(status);
+//    if (ADC_INT0 & status)
+//    {
+//     curADCResult     = MAP_ADC14_getResult(ADC_MEM0);
+//     normalizedADCRes = (curADCResult * 3.3) / 16384;
+//     MAP_ADC14_toggleConversionTrigger();
+//    }
+//}
+//
+//void ADC_Init(void) {
+//
+//    // Setting Flash wait state
+//    MAP_FlashCtl_setWaitState(FLASH_BANK0, 2);
+//    MAP_FlashCtl_setWaitState(FLASH_BANK1, 2);
+//
+//    // Setting DCO to 48MHz
+//    MAP_PCM_setPowerState(PCM_AM_LDO_VCORE1);
+//    MAP_CS_setDCOCenteredFrequency(CS_DCO_FREQUENCY_48);
+//
+//    // Enabling the FPU for floating point operation
+//    MAP_FPU_enableModule();
+//    MAP_FPU_enableLazyStacking();
+//
+//    // Initializing ADC (MCLK/1/4)
+//    MAP_ADC14_enableModule();
+//    MAP_ADC14_initModule(ADC_CLOCKSOURCE_MCLK, ADC_PREDIVIDER_1, ADC_DIVIDER_4, 0);
+//
+//    // Configuring GPIOs (5.5 A0)
+//    MAP_GPIO_setAsPeripheralModuleFunctionInputPin(GPIO_PORT_P5, GPIO_PIN5, GPIO_TERTIARY_MODULE_FUNCTION);
+//
+//    // Configuring ADC Memory
+//    MAP_ADC14_configureSingleSampleMode(ADC_MEM0, true);
+//    MAP_ADC14_configureConversionMemory(ADC_MEM0, ADC_VREFPOS_AVCC_VREFNEG_VSS, ADC_INPUT_A0, false);
+//
+//    // Configuring Sample Timer
+//    MAP_ADC14_enableSampleTimer(ADC_MANUAL_ITERATION);
+//
+//    // Enabling/Toggling Conversion
+//    MAP_ADC14_enableConversion();
+//    MAP_ADC14_toggleConversionTrigger();
+//
+//    // Enabling interrupts
+//    MAP_ADC14_enableInterrupt(ADC_INT0);
+//    MAP_Interrupt_enableInterrupt(INT_ADC14);
+//    MAP_Interrupt_enableMaster();
+//}
+//
+//void PWM()
+//{
+//    dc = (normalizedADCRes/3.3);                        // Equation for get dc
+//    //    TIMER_A0 -> CCR[0]  = 500 - 1;                         // PWM Period, 500 Hz frequency
+//    //    TIMER_A0 -> CCTL[1] = TIMER_A_CCTLN_OUTMOD_7;          // Timer_A1 Capture/Compare Control 1 Register, Reset/Set output mode
+//    //    TIMER_A0 -> CCR[1]  = dc * 100;                        // PWM duty cycle
+//    pwmConfig.dutyCycle = dc * 6400;                    // changing the duty cycle
+//
+//    MAP_Timer_A_generatePWM(TIMER_A0_BASE, &pwmConfig); // Generating a PWM
+//}
+//
+//void PWM_Init() {
+//MAP_GPIO_setAsPeripheralModuleFunctionOutputPin(GPIO_PORT_P2,GPIO_PIN4, GPIO_PRIMARY_MODULE_FUNCTION); //Configuring GPIO2.4 as peripheral output for PWM  and P6.7 for button * interrupt
+//    MAP_Timer_A_generatePWM(TIMER_A0_BASE, &pwmConfig); // Configuring Timer_A to have a period of approximately 500ms and an initial duty cycle of 10% of that (3200 ticks)
+//}

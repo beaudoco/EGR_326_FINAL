@@ -11,9 +11,14 @@ GEN_CMDS__FLAG :=
 
 ORDERED_OBJS += \
 "./COMMONCLOCKS.obj" \
+"./CS_Driver.obj" \
+"./ClockSystem.obj" \
 "./KEYPAD.obj" \
+"./MSPIO.obj" \
+"./MotorLib.obj" \
 "./RTC.obj" \
 "./ST7735.obj" \
+"./UART_Driver.obj" \
 "./main.obj" \
 "./startup_msp432p401r_ccs.obj" \
 "./system_msp432p401r.obj" \
@@ -163,8 +168,8 @@ EGR326_Final_Project.bin: $(EXE_OUTPUTS)
 # Other Targets
 clean:
 	-$(RM) $(BIN_OUTPUTS__QUOTED)$(EXE_OUTPUTS__QUOTED)
-	-$(RM) "COMMONCLOCKS.obj" "KEYPAD.obj" "RTC.obj" "ST7735.obj" "main.obj" "startup_msp432p401r_ccs.obj" "system_msp432p401r.obj" 
-	-$(RM) "KEYPAD.d" "RTC.d" "ST7735.d" "main.d" "startup_msp432p401r_ccs.d" "system_msp432p401r.d" 
+	-$(RM) "COMMONCLOCKS.obj" "CS_Driver.obj" "ClockSystem.obj" "KEYPAD.obj" "MSPIO.obj" "MotorLib.obj" "RTC.obj" "ST7735.obj" "UART_Driver.obj" "main.obj" "startup_msp432p401r_ccs.obj" "system_msp432p401r.obj" 
+	-$(RM) "CS_Driver.d" "ClockSystem.d" "KEYPAD.d" "MSPIO.d" "MotorLib.d" "RTC.d" "ST7735.d" "UART_Driver.d" "main.d" "startup_msp432p401r_ccs.d" "system_msp432p401r.d" 
 	-$(RM) "COMMONCLOCKS.d" 
 	-@echo 'Finished clean'
 	-@echo ' '
