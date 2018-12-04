@@ -19,7 +19,7 @@
 
 #define SLAVE_ADDRESS       0b1101000
 
-const eUSCI_I2C_MasterConfig i2cConfig =
+const eUSCI_I2C_MasterConfig i2cConfigRTC =
 {
         EUSCI_B_I2C_CLOCKSOURCE_SMCLK,          // SMCLK Clock Source
         3000000,                                // SMCLK = 3MHz
@@ -39,7 +39,7 @@ void RTC_iicInit() {
     GPIO_PIN4 + GPIO_PIN5, GPIO_PRIMARY_MODULE_FUNCTION);           // P6.4 is UCB1SDA, P6.5 is UCB1SCL
 
     // Initializing I2C Master (see description in Driver Lib for
-    MAP_I2C_initMaster(EUSCI_B1_BASE, &i2cConfig);                  // proper configuration options)
+    MAP_I2C_initMaster(EUSCI_B1_BASE, &i2cConfigRTC);               // proper configuration options)
     MAP_I2C_setSlaveAddress(EUSCI_B1_BASE, SLAVE_ADDRESS);          // Specify slave address
     MAP_I2C_setMode(EUSCI_B1_BASE, EUSCI_B_I2C_TRANSMIT_MODE);      // Set Master in transmit mode
     MAP_I2C_enableModule(EUSCI_B1_BASE);                            // Enable I2C Module to start operations

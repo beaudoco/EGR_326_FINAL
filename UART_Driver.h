@@ -7,7 +7,7 @@
 #include <uart.h>
 #include <gpio.h>
 
-#define UARTA0_BUFFERSIZE 2048
+#define UARTA1_BUFFERSIZE 2048
 #define UARTA2_BUFFERSIZE 2048
 
 void UART_Init(uint32_t UART, eUSCI_UART_Config UARTConfig);

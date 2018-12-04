@@ -89,9 +89,6 @@ void MOTORLIB_timerInit(void) {
 }
 
 void MOTORLIB_moveForward(void) {
-    MOTORLIB_setTimerALeftDC(dcLeft);
-    MOTORLIB_setTimerARightDC(dcRight);
-
     /* MFL */
     MAP_GPIO_setOutputHighOnPin(GPIO_PORT_P8, GPIO_PIN5);                 // High
     MAP_GPIO_setOutputLowOnPin(GPIO_PORT_P9, GPIO_PIN0);                  // Low
@@ -104,6 +101,8 @@ void MOTORLIB_moveForward(void) {
     /* MBR */
     MAP_GPIO_setOutputHighOnPin(GPIO_PORT_P10, GPIO_PIN1);                // High
     MAP_GPIO_setOutputLowOnPin(GPIO_PORT_P10, GPIO_PIN3);                 // Low
+    MOTORLIB_setTimerALeftDC(dcLeft);
+    MOTORLIB_setTimerARightDC(dcRight);
 
 }
 
@@ -157,3 +156,4 @@ void MOTORLIB_setLeftDC(int dc) {
 void MOTORLIB_setRightDC(int dc) {
     dcRight = dc;
 }
+

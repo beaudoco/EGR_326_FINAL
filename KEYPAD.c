@@ -21,7 +21,7 @@
 #define CALIBRATION_START   0x000200000         // CALIBRATION START
 
 char RTC_registers[20];
-uint16_t textColor = ST7735_GREEN;
+uint16_t textColorKP = ST7735_GREEN;
 
 uint8_t inline convertFromBCD(uint8_t bcd) {return (bcd & 0x0F) + (((bcd & 0xF0)>>4) * 10);}
 
@@ -251,11 +251,11 @@ void *KEYPAD_printTime(int *firstRead, char timeArr1[], char timeArr2[], char ti
 
     MAP_FlashCtl_protectSector(FLASH_INFO_MEMORY_SPACE_BANK0,FLASH_SECTOR0);                        // Setting the sector back to protected
 
-    ST7735_DrawString(2, 6, timeArr1, textColor);
-    ST7735_DrawString(2, 7, timeArr2, textColor);
-    ST7735_DrawString(2, 8, timeArr3, textColor);
-    ST7735_DrawString(2, 9, timeArr4, textColor);
-    ST7735_DrawString(2, 10, timeArr5, textColor);
+    ST7735_DrawString(2, 6, timeArr1, textColorKP);
+    ST7735_DrawString(2, 7, timeArr2, textColorKP);
+    ST7735_DrawString(2, 8, timeArr3, textColorKP);
+    ST7735_DrawString(2, 9, timeArr4, textColorKP);
+    ST7735_DrawString(2, 10, timeArr5, textColorKP);
 }
 
 void KEYPAD_readFromSlave() {
@@ -276,4 +276,3 @@ void KEYPAD_readFromSlave() {
     while(MAP_I2C_isBusBusy(EUSCI_B1_BASE));    //Wait
 
 }
-

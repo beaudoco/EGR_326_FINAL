@@ -211,18 +211,13 @@
 #define BUFFER_SIZE    128
 #define SLAVE_ADDRESS  0x48
 
-// Statics
-static volatile uint16_t curADCResult;
-static volatile float normalizedADCRes;
-
 /*Data Buffer*/
 char Buffer[BUFFER_SIZE];
 
 int dc  = 75;
 int key = 0;
-int   flag = 0;
 
-uint16_t textColorMain = ST7735_GREEN;
+uint16_t textColor = ST7735_GREEN;
 uint16_t bgColor   = ST7735_BLACK;
 
 uint16_t cusGrey;
@@ -232,23 +227,18 @@ uint16_t cusRed;
 
 char TXData[10] = "RGBBGRBGGR";
 
-//void port_Init(void);
+void port_Init(void);
 void initClocks(void);
 void displayMenu(void);
 
-void ADC_Init();
-void PWM();
-void PWM_Init();
-
-
-//const eUSCI_I2C_MasterConfig i2cConfig =
-//{
-// EUSCI_B_I2C_CLOCKSOURCE_SMCLK,     // SMCLK Clock Source
-// 3000000,                           // SMCLK = 3MHz
-// EUSCI_B_I2C_SET_DATA_RATE_100KBPS, // Desired I2C Clock of 400khz
-// 0,                                 // No byte counter threshold
-// EUSCI_B_I2C_NO_AUTO_STOP           // No Autostop
-//};
+const eUSCI_I2C_MasterConfig i2cConfig =
+{
+ EUSCI_B_I2C_CLOCKSOURCE_SMCLK,     // SMCLK Clock Source
+ 3000000,                           // SMCLK = 3MHz
+ EUSCI_B_I2C_SET_DATA_RATE_100KBPS, // Desired I2C Clock of 400khz
+ 0,                                 // No byte counter threshold
+ EUSCI_B_I2C_NO_AUTO_STOP           // No Autostop
+};
 
 /* UART Configuration Parameter. These are the configuration parameters to
  * make the eUSCI A UART module to operate with a 9600 baud rate. These
@@ -269,28 +259,16 @@ eUSCI_UART_Config UART2Config =
      EUSCI_A_UART_OVERSAMPLING_BAUDRATE_GENERATION
 };
 
-// Timer_A PWM Configuration Parameter
-Timer_A_PWMConfig pwmConfig = { TIMER_A_CLOCKSOURCE_SMCLK,
-                                TIMER_A_CLOCKSOURCE_DIVIDER_1,
-                                6400,
-                                TIMER_A_CAPTURECOMPARE_REGISTER_1,
-                                TIMER_A_OUTPUTMODE_RESET_SET,
-                                3200 };
 
 int main(void)
 {
     MAP_WDT_A_holdTimer();                      // Stop Watch dog
 
-    curADCResult = 0;
-
     initClocks();                               // MSP432 running at 24 MHz
     UART_Init(EUSCI_A2_BASE, UART2Config);      // Initialize Hardware required for the HC-05
-//    port_Init();                                // Initializing ports for THIS IS EMPTY AND NOT IN PROGRAM KEEPING UNTIL USED
+    port_Init();                                // Initializing ports for
     COMMONCLOCKS_sysTick_Init();                // Initializing systick timer
     ST7735_InitR(INITR_REDTAB);                 // Initializing lcd
-
-    ADC_Init    ();                             // ADC Initialization
-    PWM_Init    ();                             // Pulse Width Modulation Initialization
 
     MOTORLIB_portInit();                        // Initializing Motor ports
     MOTORLIB_timerInit();                       // Initializing Timer A0 ports
@@ -307,14 +285,18 @@ int main(void)
 
     /*Get data from HC-05*/
     MSPrintf(EUSCI_A2_BASE, "Please Start Car...\r\n");
-    //MSPgets(EUSCI_A2_BASE, Buffer, BUFFER_SIZE);            // Will hang here until it receives any input.
+    MSPgets(EUSCI_A2_BASE, Buffer, BUFFER_SIZE);            // Will hang here until it receives any input.
     memset(Buffer, 0, sizeof(Buffer));                      // Clearing buffer
 
     ST7735_FillScreen(0);                                   // Turning on LCD
     ST7735_FillScreen(bgColor);                             // Setting Background
 
     displayMenu();                                          // Houstan... our demo is starting
-
+    // Configure GPIO
+            P2->DIR  |= BIT4;
+            P2->SEL0 |= BIT4;
+            P2->SEL1 %= ~(BIT4);
+    MOTORLIB_moveBackward();
     while(1)
     {
         key = KEYPAD_getKey();
@@ -322,7 +304,7 @@ int main(void)
             MSPgets2(EUSCI_A2_BASE, Buffer, BUFFER_SIZE);
             /*Send data to serial terminal*/
             MSPrintf(EUSCI_A2_BASE, "Data received from HC-05: %s\r\n", Buffer);
-            ST7735_DrawString(2, 8,Buffer, textColorMain);
+            ST7735_DrawString(2, 8,Buffer, textColor);
             if (Buffer[0] == 'F')
                MOTORLIB_moveForward();
             else if (Buffer[0] == 'B')
@@ -346,13 +328,6 @@ int main(void)
             }
         }   // end of if keypad or bluetooth
 
-        if(flag == 1)
-                {
-                    COMMONCLOCKS_sysTick_delay_3MHZ(500);         // delay 500 ms
-                    PWM();                      // Set dc and Trigger PWM
-                    flag = 0;                   // reset flag.
-                }
-
     }   // end of while(1)
 
 }   // end of main
@@ -361,28 +336,28 @@ int main(void)
 void displayMenu(void) {
     ST7735_DrawString(3, 1,"Welcome Back ;)", cusBlue);
     ST7735_DrawString(2, 2,"Make Selection(s)", cusGreen);
-    ST7735_DrawString(0, 4,"1. Set Date & Time", cusGrey);
-    ST7735_DrawString(0, 5,"2. Show Alarm History", cusGrey);
-    ST7735_DrawString(0, 6,"3. It's my Birthday", cusGrey);
+    ST7735_DrawString(2, 4,"1. Set Date & Time", cusGrey);
+    ST7735_DrawString(2, 5,"2. Show Alarm History", cusGrey);
+    ST7735_DrawString(2, 6,"3. It's my Birthday", cusGrey);
 }
 
 /*************************************************
  * Initializes MCLK to run from external crystal.
  * Code taken from lecture notes
  ************************************************/
-//void initClocks(void)
-//{
-//    MAP_GPIO_setAsPeripheralModuleFunctionOutputPin(GPIO_PORT_PJ, GPIO_PIN3 | GPIO_PIN4, GPIO_PRIMARY_MODULE_FUNCTION); // Configuring pins for XTL usage
-//    MAP_CS_setExternalClockSourceFrequency(32000,48000000);                                                             // Setting external clock frequency
-//    MAP_PCM_setCoreVoltageLevel(PCM_VCORE1);                                                                            // Starting HFXT
-//    MAP_FlashCtl_setWaitState(FLASH_BANK0, 2);
-//    MAP_FlashCtl_setWaitState(FLASH_BANK1, 2);
-//    MAP_CS_startHFXT(false);
-//    MAP_CS_initClockSignal(CS_MCLK, CS_HFXTCLK_SELECT, CS_CLOCK_DIVIDER_1);                                             // Initializing MCLK to HFXT (48MHz)
-//    MAP_CS_initClockSignal(CS_SMCLK, CS_HFXTCLK_SELECT, CS_CLOCK_DIVIDER_4);                                            // Setting SMCLK to 12MHz (HFXT/4)
-//}
+void initClocks(void)
+{
+    MAP_GPIO_setAsPeripheralModuleFunctionOutputPin(GPIO_PORT_PJ, GPIO_PIN3 | GPIO_PIN4, GPIO_PRIMARY_MODULE_FUNCTION); // Configuring pins for XTL usage
+    MAP_CS_setExternalClockSourceFrequency(32000,48000000);                                                             // Setting external clock frequency
+    MAP_PCM_setCoreVoltageLevel(PCM_VCORE1);                                                                            // Starting HFXT
+    MAP_FlashCtl_setWaitState(FLASH_BANK0, 2);
+    MAP_FlashCtl_setWaitState(FLASH_BANK1, 2);
+    MAP_CS_startHFXT(false);
+    MAP_CS_initClockSignal(CS_MCLK, CS_HFXTCLK_SELECT, CS_CLOCK_DIVIDER_1);                                             // Initializing MCLK to HFXT (48MHz)
+    MAP_CS_initClockSignal(CS_SMCLK, CS_HFXTCLK_SELECT, CS_CLOCK_DIVIDER_4);                                            // Setting SMCLK to 12MHz (HFXT/4)
+}
 
-
+/*
 void initClocks(void)
 {
    // Configuring pins for XTL usage
@@ -404,70 +379,9 @@ void initClocks(void)
    //MAP_CS_initClockSignal(CS_SMCLK, CS_HFXTCLK_SELECT, CS_CLOCK_DIVIDER_4);
 
 }
+*/
 
-void ADC14_IRQHandler(void)     // ADC Interrupt Handler. This handler is called whenever there is a conversion that is finished for ADC_MEMM0
-{
-  uint64_t status = MAP_ADC14_getEnabledInterruptStatus();
-  flag            = 1;
-  MAP_ADC14_clearInterruptFlag(status);
-    if (ADC_INT0 & status)
-    {
-     curADCResult     = MAP_ADC14_getResult(ADC_MEM0);
-     normalizedADCRes = (curADCResult * 3.3) / 16384;
-     MAP_ADC14_toggleConversionTrigger();
-    }
+void port_Init(void) {
+
 }
 
-void ADC_Init(void) {
-
-    // Setting Flash wait state
-    MAP_FlashCtl_setWaitState(FLASH_BANK0, 2);
-    MAP_FlashCtl_setWaitState(FLASH_BANK1, 2);
-
-    // Setting DCO to 48MHz
-    MAP_PCM_setPowerState(PCM_AM_LDO_VCORE1);
-    MAP_CS_setDCOCenteredFrequency(CS_DCO_FREQUENCY_48);
-
-    // Enabling the FPU for floating point operation
-    MAP_FPU_enableModule();
-    MAP_FPU_enableLazyStacking();
-
-    // Initializing ADC (MCLK/1/4)
-    MAP_ADC14_enableModule();
-    MAP_ADC14_initModule(ADC_CLOCKSOURCE_MCLK, ADC_PREDIVIDER_1, ADC_DIVIDER_4, 0);
-
-    // Configuring GPIOs (5.5 A0)
-    MAP_GPIO_setAsPeripheralModuleFunctionInputPin(GPIO_PORT_P5, GPIO_PIN5, GPIO_TERTIARY_MODULE_FUNCTION);
-
-    // Configuring ADC Memory
-    MAP_ADC14_configureSingleSampleMode(ADC_MEM0, true);
-    MAP_ADC14_configureConversionMemory(ADC_MEM0, ADC_VREFPOS_AVCC_VREFNEG_VSS, ADC_INPUT_A0, false);
-
-    // Configuring Sample Timer
-    MAP_ADC14_enableSampleTimer(ADC_MANUAL_ITERATION);
-
-    // Enabling/Toggling Conversion
-    MAP_ADC14_enableConversion();
-    MAP_ADC14_toggleConversionTrigger();
-
-    // Enabling interrupts
-    MAP_ADC14_enableInterrupt(ADC_INT0);
-    MAP_Interrupt_enableInterrupt(INT_ADC14);
-    MAP_Interrupt_enableMaster();
-}
-
-void PWM()
-{
-    dc = (normalizedADCRes/3.3);                        // Equation for get dc
-    //    TIMER_A0 -> CCR[0]  = 500 - 1;                         // PWM Period, 500 Hz frequency
-    //    TIMER_A0 -> CCTL[1] = TIMER_A_CCTLN_OUTMOD_7;          // Timer_A1 Capture/Compare Control 1 Register, Reset/Set output mode
-    //    TIMER_A0 -> CCR[1]  = dc * 100;                        // PWM duty cycle
-    pwmConfig.dutyCycle = dc * 6400;                    // changing the duty cycle
-
-    MAP_Timer_A_generatePWM(TIMER_A0_BASE, &pwmConfig); // Generating a PWM
-}
-
-void PWM_Init() {
-MAP_GPIO_setAsPeripheralModuleFunctionOutputPin(GPIO_PORT_P2,GPIO_PIN4, GPIO_PRIMARY_MODULE_FUNCTION); //Configuring GPIO2.4 as peripheral output for PWM  and P6.7 for button * interrupt
-    MAP_Timer_A_generatePWM(TIMER_A0_BASE, &pwmConfig); // Configuring Timer_A to have a period of approximately 500ms and an initial duty cycle of 10% of that (3200 ticks)
-}
